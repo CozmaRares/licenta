@@ -1,54 +1,54 @@
 use std::collections::{HashMap, HashSet};
 
-use proc_macro::{self};
-use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Attribute, DeriveInput};
+use syn::spanned::Spanned;
 
 fn group_attrs(
-    attrs: Vec<Attribute>,
-    accepted: &HashSet<String>,
-) -> Result<HashMap<String, Vec<TokenStream>>, syn::Error> {
-    let mut grouped_attrs: HashMap<String, Vec<TokenStream>> = HashMap::new();
+    attrs: &Vec<syn::Attribute>,
+    groups: &HashSet<String>,
+) -> HashMap<String, Vec<syn::Attribute>> {
+    return attrs.iter().fold(HashMap::new(), |mut acc, attr| {
+        let attr_ident = attr.path().segments.first().unwrap().ident.to_string();
 
-    for attr in attrs {
-        let segments = &attr.path.segments;
-
-        if segments.len() != 1 {
-            let ident = &segments.iter().nth(1).unwrap().ident;
-
-            return Err(syn::Error::new(
-                ident.span(),
-                "expected only one path segment",
-            ));
+        if groups.contains(&attr_ident) {
+            acc.entry(attr_ident)
+                .or_insert_with(Vec::new)
+                .extend(vec![attr.clone()]);
         }
 
-        let ident = &segments.first().unwrap().ident;
-        let ident_str = ident.to_string();
+        return acc;
+    });
+}
 
-        if accepted.contains(&ident_str) {
-            grouped_attrs
-                .entry(ident_str)
-                .or_insert_with(Vec::new)
-                .extend(vec![attr.tokens]);
+#[proc_macro_derive(
+    RecursiveDescent,
+    attributes(exact_token, regex_token, ignore_pattern, grammar)
+)]
+pub fn derive_my_description(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let syn::DeriveInput { attrs, .. } = syn::parse(item).unwrap();
+
+    eprintln!("{:#?}", attrs);
+
+    for attr in &attrs {
+        match &attr.meta {
+            syn::Meta::Path(path) => {
+                let span = path.segments.first().unwrap().span();
+                return syn::Error::new(
+                    span,
+                    "This macro only accepts attributes of type:\n - list: #[attr(a, b, c)]\n - name-value: #[attr = a]",
+                ).to_compile_error().into();
+            }
+            _ => {}
         }
     }
 
-    return Ok(grouped_attrs);
-}
-
-#[proc_macro_derive(RecursiveDescent, attributes(grammar, token))]
-pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let DeriveInput { attrs, .. } = parse_macro_input!(input);
-
     let mut set = HashSet::new();
-    set.insert("token".to_string());
+    set.insert("exact_token".to_string());
+    set.insert("regex_token".to_string());
+    set.insert("ignore_pattern".to_string());
     set.insert("grammar".to_string());
 
-    let groups = match group_attrs(attrs, &set) {
-        Ok(g) => g,
-        Err(e) => return e.to_compile_error().into(),
-    };
+    let groups = group_attrs(&attrs, &set);
 
     eprintln!("{:#?}", groups);
 
