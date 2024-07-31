@@ -1,23 +1,56 @@
 use std::collections::{HashMap, HashSet};
 
-use quote::quote;
-use syn::spanned::Spanned;
+use quote::{quote, ToTokens};
+use syn::{
+    parse::{Parse, ParseStream, Peek},
+    parse_macro_input,
+    punctuated::Punctuated,
+    spanned::Spanned,
+};
 
 fn group_attrs(
     attrs: &Vec<syn::Attribute>,
     groups: &HashSet<String>,
-) -> HashMap<String, Vec<syn::Attribute>> {
+) -> HashMap<String, Vec<syn::Meta>> {
     return attrs.iter().fold(HashMap::new(), |mut acc, attr| {
         let attr_ident = attr.path().segments.first().unwrap().ident.to_string();
 
         if groups.contains(&attr_ident) {
             acc.entry(attr_ident)
                 .or_insert_with(Vec::new)
-                .extend(vec![attr.clone()]);
+                .extend(vec![attr.meta.clone()]);
         }
 
         return acc;
     });
+}
+
+#[derive(Debug)]
+struct KeyValue {
+    name: syn::Ident,
+    value: syn::LitStr,
+}
+
+impl Parse for KeyValue {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let name: syn::Ident = input.parse()?;
+        let _eq: syn::Token![=] = input.parse()?;
+        let value: syn::LitStr = input.parse()?;
+        Ok(KeyValue { name, value })
+    }
+}
+
+type KeyValueList = Punctuated<KeyValue, syn::Token![,]>;
+
+struct Attrib {
+    attr: syn::Ident,
+    values: KeyValueList,
+}
+
+impl Parse for Attrib {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        todo!();
+    }
 }
 
 #[proc_macro_derive(
@@ -27,7 +60,7 @@ fn group_attrs(
 pub fn derive_my_description(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let syn::DeriveInput { attrs, .. } = syn::parse(item).unwrap();
 
-    eprintln!("{:#?}", attrs);
+    //eprintln!("{:#?}", attrs);
 
     for attr in &attrs {
         match &attr.meta {
@@ -50,7 +83,22 @@ pub fn derive_my_description(item: proc_macro::TokenStream) -> proc_macro::Token
 
     let groups = group_attrs(&attrs, &set);
 
-    eprintln!("{:#?}", groups);
+    //groups.iter().for_each(|(key, meta)| {
+    //    eprintln!("{:#?}\n=>\n{:#?}\n\n", key, meta);
+    //});
+
+    let a = groups.get("exact_token").unwrap().first().unwrap();
+
+    let a = match a {
+        syn::Meta::List(meta) => meta.tokens.clone().into(),
+        _ => unreachable!(),
+    };
+
+    eprintln!("{:#?}", a);
+
+    let b = parse_macro_input!(a with KeyValueList::parse_terminated);
+
+    eprintln!("{:#?}", b);
 
     let output = quote! {};
     output.into()
