@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use quote::{quote, ToTokens};
 use syn::{
-    parse::{Parse, ParseStream, Peek},
+    parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
     spanned::Spanned,
@@ -11,14 +11,14 @@ use syn::{
 fn group_attrs(
     attrs: &Vec<syn::Attribute>,
     groups: &HashSet<String>,
-) -> HashMap<String, Vec<syn::Meta>> {
+) -> HashMap<String, Vec<proc_macro::TokenStream>> {
     return attrs.iter().fold(HashMap::new(), |mut acc, attr| {
         let attr_ident = attr.path().segments.first().unwrap().ident.to_string();
 
         if groups.contains(&attr_ident) {
             acc.entry(attr_ident)
                 .or_insert_with(Vec::new)
-                .extend(vec![attr.meta.clone()]);
+                .extend(vec![attr.to_token_stream().into()]);
         }
 
         return acc;
@@ -27,8 +27,8 @@ fn group_attrs(
 
 #[derive(Debug)]
 struct KeyValue {
-    name: syn::Ident,
-    value: syn::LitStr,
+    name: String,
+    value: String,
 }
 
 impl Parse for KeyValue {
@@ -36,20 +36,39 @@ impl Parse for KeyValue {
         let name: syn::Ident = input.parse()?;
         let _eq: syn::Token![=] = input.parse()?;
         let value: syn::LitStr = input.parse()?;
-        Ok(KeyValue { name, value })
+        Ok(KeyValue {
+            name: name.to_string(),
+            value: value.value(),
+        })
     }
 }
 
 type KeyValueList = Punctuated<KeyValue, syn::Token![,]>;
 
-struct Attrib {
-    attr: syn::Ident,
-    values: KeyValueList,
+#[derive(Debug)]
+struct AttribList {
+    attr: String,
+    values: Vec<KeyValue>,
 }
 
-impl Parse for Attrib {
+impl Parse for AttribList {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        todo!();
+        let _hash: syn::Token![#] = input.parse()?;
+
+        let content_bracketed;
+        let _bracketed = syn::bracketed!(content_bracketed in input);
+
+        let attr: syn::Ident = content_bracketed.parse()?;
+
+        let content_parenthesized;
+        let _parenthesized = syn::parenthesized!(content_parenthesized in content_bracketed);
+
+        let values = KeyValueList::parse_terminated(&content_parenthesized)?;
+
+        Ok(AttribList {
+            attr: attr.to_string(),
+            values: values.into_iter().collect(),
+        })
     }
 }
 
@@ -87,16 +106,15 @@ pub fn derive_my_description(item: proc_macro::TokenStream) -> proc_macro::Token
     //    eprintln!("{:#?}\n=>\n{:#?}\n\n", key, meta);
     //});
 
-    let a = groups.get("exact_token").unwrap().first().unwrap();
+    let a = groups
+        .get("exact_token")
+        .unwrap()
+        .first()
+        .unwrap()
+        .to_owned();
 
-    let a = match a {
-        syn::Meta::List(meta) => meta.tokens.clone().into(),
-        _ => unreachable!(),
-    };
-
-    eprintln!("{:#?}", a);
-
-    let b = parse_macro_input!(a with KeyValueList::parse_terminated);
+    let b = parse_macro_input!(a as AttribList);
+    //AttribList::parse(a).into();
 
     eprintln!("{:#?}", b);
 
