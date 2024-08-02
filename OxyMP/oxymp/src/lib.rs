@@ -18,33 +18,34 @@ fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::
     });
 }
 
-#[proc_macro_derive(
-    RecursiveDescent,
-    attributes(exact_token, regex_token, ignore_pattern, grammar)
-)]
-pub fn derive(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let syn::DeriveInput { attrs, .. } = syn::parse(item).unwrap();
+fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenStream> {
+    let syn::DeriveInput { attrs, .. } = syn::parse(input).unwrap();
 
     let groups = group_attrs(&attrs);
 
     for (key, attrs) in groups {
         for attr in attrs {
             if &key == "grammar" {
-                let parsed: AttributeKeyValue = match syn::parse2(attr) {
-                    Ok(o) => o,
-                    Err(e) => return e.to_compile_error().into(),
-                };
+                let parsed: AttributeKeyValue = syn::parse2(attr)?;
                 eprintln!("{:#?}", parsed);
             } else {
-                let parsed: AttributeList = match syn::parse2(attr) {
-                    Ok(o) => o,
-                    Err(e) => return e.to_compile_error().into(),
-                };
+                let parsed: AttributeList = syn::parse2(attr)?;
                 eprintln!("{:#?}", parsed);
             }
         }
     }
 
     let output = quote! {};
-    output.into()
+    Ok(output.into())
+}
+
+#[proc_macro_derive(
+    RecursiveDescent,
+    attributes(exact_token, regex_token, ignore_pattern, grammar)
+)]
+pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match derive_impl(input) {
+        Ok(o) => o,
+        Err(e) => e.to_compile_error().into(),
+    }
 }
