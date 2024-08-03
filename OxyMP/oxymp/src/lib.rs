@@ -29,6 +29,16 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenS
         eprintln!("{:#?}", token);
     }
 
+    for attr in groups.remove("regex_token").unwrap() {
+        let token = Token::regex_token(attr.to_owned())?;
+        eprintln!("{:#?}", token);
+    }
+
+    for attr in groups.remove("ignore_pattern").unwrap() {
+        let token = Token::ignore_pattern(attr.to_owned())?;
+        eprintln!("{:#?}", token);
+    }
+
     let output = quote! {};
     Ok(output.into())
 }

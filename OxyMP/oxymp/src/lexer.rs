@@ -1,23 +1,17 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use crate::attribute::{AttributeList, KeyValue};
+use crate::attribute::AttributeList;
 
-//#[regex_token(
-//    name = "Number",
-//    regex = r"-?[0-9]+",
-//    transformer_fn = "match_number",
-//    kind = "i64"
-//)]
 //#[ignore_pattern(regex = r"\s+")]
 
 #[derive(Debug)]
-pub struct TokenExactMatch {
+pub struct ExactToken {
     name: String,
     pattern: String,
 }
 
 #[derive(Debug)]
-pub struct TokenRegex {
+pub struct RegexToken {
     name: String,
     regex: String,
     transformer_fn: String,
@@ -25,15 +19,15 @@ pub struct TokenRegex {
 }
 
 #[derive(Debug)]
-pub struct TokenIgnore {
+pub struct IgnorePattern {
     regex: String,
 }
 
 #[derive(Debug)]
 pub enum Token {
-    ExactMatch(TokenExactMatch),
-    Regex(TokenRegex),
-    Ignore(TokenIgnore),
+    Exact(ExactToken),
+    Regex(RegexToken),
+    Ignore(IgnorePattern),
 }
 
 impl Token {
@@ -43,22 +37,53 @@ impl Token {
         expected_properties.insert("name".to_string());
         expected_properties.insert("pattern".to_string());
 
-        let AttributeList { pairs, .. } = AttributeList::prepare_token_info(
+        let map = AttributeList::prepare_token_info(
             tokens,
             "exact_token".to_string(),
             expected_properties,
         )?;
 
-        let map = pairs
-            .iter()
-            .fold(HashMap::new(), |mut acc, KeyValue { name, value }| {
-                acc.insert(name.content.clone(), value);
-                acc
-            });
-
-        return Ok(Token::ExactMatch(TokenExactMatch {
+        return Ok(Token::Exact(ExactToken {
             name: map.get("name").unwrap().to_string(),
             pattern: map.get("pattern").unwrap().to_string(),
+        }));
+    }
+
+    //#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64")]
+    pub fn regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
+        let mut expected_properties = HashSet::new();
+        expected_properties.insert("name".to_string());
+        expected_properties.insert("regex".to_string());
+        expected_properties.insert("transformer_fn".to_string());
+        expected_properties.insert("kind".to_string());
+
+        let map = AttributeList::prepare_token_info(
+            tokens,
+            "regex_token".to_string(),
+            expected_properties,
+        )?;
+
+        return Ok(Token::Regex(RegexToken {
+            name: map.get("name").unwrap().to_string(),
+            regex: map.get("regex").unwrap().to_string(),
+            transformer_fn: map.get("transformer_fn").unwrap().to_string(),
+            kind: map.get("kind").unwrap().to_string(),
+        }));
+    }
+
+    //#[ignore_pattern(regex = r"\s+")]
+    pub fn ignore_pattern(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
+        let mut expected_properties = HashSet::new();
+        expected_properties.insert("regex".to_string());
+
+        let map = AttributeList::prepare_token_info(
+            tokens,
+            "ignore_pattern".to_string(),
+            expected_properties,
+        )?;
+
+        return Ok(Token::Ignore(IgnorePattern {
+            regex: map.get("regex").unwrap().to_string(),
         }));
     }
 }

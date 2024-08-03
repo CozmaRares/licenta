@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use syn::{
     parse::{Parse, ParseStream},
@@ -86,7 +86,7 @@ impl AttributeList {
         tokens: proc_macro2::TokenStream,
         expected_attribute_name: String,
         expected_properties: HashSet<String>,
-    ) -> syn::Result<AttributeList> {
+    ) -> syn::Result<HashMap<String, String>> {
         let parsed_attribute: AttributeList = syn::parse2(tokens)?;
 
         if parsed_attribute.attr.content != expected_attribute_name {
@@ -130,6 +130,12 @@ impl AttributeList {
             }
         }
 
-        return Ok(parsed_attribute);
+        return Ok(parsed_attribute.pairs.iter().fold(
+            HashMap::new(),
+            |mut acc, KeyValue { name, value }| {
+                acc.insert(name.content.clone(), value.to_string());
+                acc
+            },
+        ));
     }
 }
