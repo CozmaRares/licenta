@@ -32,29 +32,28 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenS
     token_type_handlers.insert("regex_token".to_string(), &TokenInfo::regex_token);
     token_type_handlers.insert("ignore_pattern".to_string(), &TokenInfo::ignore_pattern);
 
-    let mut token_groups = HashMap::new();
+    let mut token_info = Vec::new();
 
     for (attr, streams) in attr_groups {
         for stream in streams {
             match token_type_handlers.get(&attr) {
-                Some(handler) => token_groups
-                    .entry(attr.clone())
-                    .or_insert_with(Vec::new)
-                    .extend(vec![handler(stream)]),
+                Some(handler) => token_info.push(handler(stream)?),
                 None => {}
             }
         }
     }
 
-    eprintln!("{:#?}", token_groups);
+    eprintln!("{:#?}", token_info);
 
-    let lexer_tokens = Lexer::generate_def();
+    let lexer_def = Lexer::generate_def();
+    let tokens_def = Lexer::generate_tokens(&token_info);
 
     let output = quote! {
         pub mod lexer {
-            #lexer_tokens
-        }
+            #lexer_def
 
+            #tokens_def
+        }
     };
 
     Ok(output.into())

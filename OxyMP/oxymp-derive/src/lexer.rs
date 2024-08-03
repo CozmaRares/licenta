@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use quote::quote;
+use quote::{format_ident, quote};
 
 use crate::attribute::AttributeList;
 
@@ -115,8 +115,32 @@ impl Lexer {
                 Ignore,
             }
 
-            // TODO: remove this, put here just to make the code compile
-            struct Token{}
+        };
+    }
+
+    pub fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+        let token_info = token_info.iter();
+
+        let tokens: Vec<proc_macro2::Ident> = token_info
+            .filter(|info| match info {
+                TokenInfo::Ignore(_) => false,
+                _ => true,
+            })
+            .map(|info| match info {
+                TokenInfo::Exact(ExactToken { name, .. }) => name,
+                TokenInfo::Regex(RegexToken { name, .. }) => name,
+                _ => unreachable!(),
+            })
+            .map(|name| format_ident!("{}", name))
+            .collect();
+
+        eprintln!("{:#?}", tokens);
+
+        return quote! {
+            pub enum Token {
+                __internal_NULL__,
+                #(#tokens),*
+            }
         };
     }
 }
