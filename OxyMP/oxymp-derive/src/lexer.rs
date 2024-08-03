@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use quote::quote;
+
 use crate::attribute::AttributeList;
 
 //#[ignore_pattern(regex = r"\s+")]
@@ -85,5 +87,36 @@ impl TokenInfo {
         return Ok(TokenInfo::Ignore(IgnorePattern {
             regex: map.get("regex").unwrap().to_string(),
         }));
+    }
+}
+
+pub struct Lexer;
+
+impl Lexer {
+    pub fn generate_def() -> proc_macro2::TokenStream {
+        return quote! {
+            pub enum TokenMatcher {
+                ExactMatch(::std::string::String),
+                Regex(::regex::Regex),
+            }
+
+            impl TokenMatcher {
+                pub fn regex(re: &str) -> ::std::result::Result<Self, ::regex::Error> {
+                    let re = ::std::format!("^{re}");
+                    let re = ::regex::Regex::new(&re);
+
+                    return re.map(|re| TokenMatcher::Regex(re));
+                }
+            }
+
+            pub enum TokenHandler {
+                ExactToken(Token),
+                Regex(Box<dyn Fn(&str) -> Token>),
+                Ignore,
+            }
+
+            // TODO: remove this, put here just to make the code compile
+            struct Token{}
+        };
     }
 }

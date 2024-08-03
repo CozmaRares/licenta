@@ -48,7 +48,15 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenS
 
     eprintln!("{:#?}", token_groups);
 
-    let output = quote! {};
+    let lexer_tokens = Lexer::generate_def();
+
+    let output = quote! {
+        pub mod lexer {
+            #lexer_tokens
+        }
+
+    };
+
     Ok(output.into())
 }
 
