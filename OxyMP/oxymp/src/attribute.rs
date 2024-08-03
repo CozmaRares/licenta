@@ -4,9 +4,15 @@ use syn::{
 };
 
 #[derive(Debug)]
+pub struct Spanned<T> {
+    content: T,
+    span: proc_macro2::Span,
+}
+
+#[derive(Debug)]
 pub struct KeyValue {
-    pub name: String,
-    pub value: String,
+    pub name: Spanned<String>,
+    pub value: Spanned<String>,
 }
 
 impl Parse for KeyValue {
@@ -15,15 +21,21 @@ impl Parse for KeyValue {
         let _eq: syn::Token![=] = input.parse()?;
         let value: syn::LitStr = input.parse()?;
         Ok(KeyValue {
-            name: name.to_string(),
-            value: value.value(),
+            name: Spanned {
+                content: name.to_string(),
+                span: name.span(),
+            },
+            value: Spanned {
+                content: value.value(),
+                span: value.span(),
+            },
         })
     }
 }
 
 #[derive(Debug)]
 pub struct AttributeList {
-    pub attr: String,
+    pub attr: Spanned<String>,
     pub values: Vec<KeyValue>,
 }
 
@@ -44,7 +56,10 @@ impl Parse for AttributeList {
         let values = A::parse_terminated(&content_parenthesized)?;
 
         Ok(AttributeList {
-            attr: attr.to_string(),
+            attr: Spanned {
+                content: attr.to_string(),
+                span: attr.span(),
+            },
             values: values.into_iter().collect(),
         })
     }
