@@ -24,20 +24,29 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenS
 
     let mut attr_groups = group_attrs(&attrs);
 
-    for attr in attr_groups.remove("exact_token").unwrap() {
-        let token = TokenInfo::exact_token(attr)?;
-        eprintln!("{:#?}", token);
+    let _grammar = attr_groups.remove("grammar");
+
+    type CreateTokenInfo = dyn Fn(proc_macro2::TokenStream) -> syn::Result<TokenInfo>;
+    let mut token_type_handlers: HashMap<String, &CreateTokenInfo> = HashMap::new();
+    token_type_handlers.insert("exact_token".to_string(), &TokenInfo::exact_token);
+    token_type_handlers.insert("regex_token".to_string(), &TokenInfo::regex_token);
+    token_type_handlers.insert("ignore_pattern".to_string(), &TokenInfo::ignore_pattern);
+
+    let mut token_groups = HashMap::new();
+
+    for (attr, streams) in attr_groups {
+        for stream in streams {
+            match token_type_handlers.get(&attr) {
+                Some(handler) => token_groups
+                    .entry(attr.clone())
+                    .or_insert_with(Vec::new)
+                    .extend(vec![handler(stream)]),
+                None => {}
+            }
+        }
     }
 
-    for attr in attr_groups.remove("regex_token").unwrap() {
-        let token = TokenInfo::regex_token(attr)?;
-        eprintln!("{:#?}", token);
-    }
-
-    for attr in attr_groups.remove("ignore_pattern").unwrap() {
-        let token = TokenInfo::ignore_pattern(attr)?;
-        eprintln!("{:#?}", token);
-    }
+    eprintln!("{:#?}", token_groups);
 
     let output = quote! {};
     Ok(output.into())
