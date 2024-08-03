@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -5,14 +7,14 @@ use syn::{
 
 #[derive(Debug)]
 pub struct Spanned<T> {
-    content: T,
-    span: proc_macro2::Span,
+    pub content: T,
+    pub span: proc_macro2::Span,
 }
 
 #[derive(Debug)]
 pub struct KeyValue {
     pub name: Spanned<String>,
-    pub value: Spanned<String>,
+    pub value: String,
 }
 
 impl Parse for KeyValue {
@@ -25,10 +27,7 @@ impl Parse for KeyValue {
                 content: name.to_string(),
                 span: name.span(),
             },
-            value: Spanned {
-                content: value.value(),
-                span: value.span(),
-            },
+            value: value.value(),
         })
     }
 }
@@ -36,7 +35,7 @@ impl Parse for KeyValue {
 #[derive(Debug)]
 pub struct AttributeList {
     pub attr: Spanned<String>,
-    pub values: Vec<KeyValue>,
+    pub pairs: Vec<KeyValue>,
 }
 
 impl Parse for AttributeList {
@@ -52,15 +51,15 @@ impl Parse for AttributeList {
         let content_parenthesized;
         let _parenthesized = syn::parenthesized!(content_parenthesized in content_bracketed);
 
-        type A = Punctuated<KeyValue, syn::Token![,]>;
-        let values = A::parse_terminated(&content_parenthesized)?;
+        type CommaSeparated = Punctuated<KeyValue, syn::Token![,]>;
+        let pairs = CommaSeparated::parse_terminated(&content_parenthesized)?;
 
         Ok(AttributeList {
             attr: Spanned {
                 content: attr.to_string(),
                 span: attr.span(),
             },
-            values: values.into_iter().collect(),
+            pairs: pairs.into_iter().collect(),
         })
     }
 }
@@ -79,5 +78,58 @@ impl Parse for AttributeKeyValue {
         let key_value: KeyValue = content_bracketed.parse()?;
 
         Ok(AttributeKeyValue(key_value))
+    }
+}
+
+impl AttributeList {
+    pub fn prepare_token_info(
+        tokens: proc_macro2::TokenStream,
+        expected_attribute_name: String,
+        expected_properties: HashSet<String>,
+    ) -> syn::Result<AttributeList> {
+        let parsed_attribute: AttributeList = syn::parse2(tokens)?;
+
+        if parsed_attribute.attr.content != expected_attribute_name {
+            return Err(syn::Error::new(
+                parsed_attribute.attr.span,
+                format!(
+                    "Wrong attribute\nExpected: {}\nGot: {}",
+                    expected_attribute_name, parsed_attribute.attr.content
+                ),
+            ));
+        }
+
+        let mut found_properties: HashSet<&String> = HashSet::new();
+
+        for pair in &parsed_attribute.pairs {
+            let KeyValue { name, .. } = pair;
+
+            if !expected_properties.contains(&name.content) {
+                return Err(syn::Error::new(
+                    name.span,
+                    format!("Unknown property: {}", name.content),
+                ));
+            }
+
+            if found_properties.contains(&name.content) {
+                return Err(syn::Error::new(
+                    name.span,
+                    format!("Duplicated property: {}", name.content),
+                ));
+            }
+
+            found_properties.insert(&name.content);
+        }
+
+        for expected_property in expected_properties {
+            if !found_properties.contains(&expected_property) {
+                return Err(syn::Error::new(
+                    parsed_attribute.attr.span,
+                    format!("Missing property: {}", expected_property),
+                ));
+            }
+        }
+
+        return Ok(parsed_attribute);
     }
 }
