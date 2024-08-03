@@ -19,7 +19,7 @@ fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::
     });
 }
 
-fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenStream> {
+fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
     let syn::DeriveInput { attrs, .. } = syn::parse(input).unwrap();
 
     let mut attr_groups = group_attrs(&attrs);
@@ -56,7 +56,7 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenS
         }
     };
 
-    Ok(output.into())
+    return Ok(output);
 }
 
 #[proc_macro_derive(
@@ -64,8 +64,9 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenS
     attributes(exact_token, regex_token, ignore_pattern, grammar)
 )]
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    match derive_impl(input) {
+    return match derive_impl(input) {
         Ok(o) => o,
-        Err(e) => e.to_compile_error().into(),
+        Err(e) => e.to_compile_error(),
     }
+    .into();
 }

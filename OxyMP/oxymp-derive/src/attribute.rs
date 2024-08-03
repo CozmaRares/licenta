@@ -22,13 +22,13 @@ impl Parse for KeyValue {
         let name: syn::Ident = input.parse()?;
         let _eq: syn::Token![=] = input.parse()?;
         let value: syn::LitStr = input.parse()?;
-        Ok(KeyValue {
+        return Ok(KeyValue {
             name: Spanned {
                 content: name.to_string(),
                 span: name.span(),
             },
             value: value.value(),
-        })
+        });
     }
 }
 
@@ -54,13 +54,13 @@ impl Parse for AttributeList {
         type CommaSeparated = Punctuated<KeyValue, syn::Token![,]>;
         let pairs = CommaSeparated::parse_terminated(&content_parenthesized)?;
 
-        Ok(AttributeList {
+        return Ok(AttributeList {
             attr: Spanned {
                 content: attr.to_string(),
                 span: attr.span(),
             },
             pairs: pairs.into_iter().collect(),
-        })
+        });
     }
 }
 
@@ -77,7 +77,7 @@ impl Parse for AttributeKeyValue {
 
         let key_value: KeyValue = content_bracketed.parse()?;
 
-        Ok(AttributeKeyValue(key_value))
+        return Ok(AttributeKeyValue(key_value));
     }
 }
 
