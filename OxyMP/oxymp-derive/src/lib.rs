@@ -22,20 +22,20 @@ fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::
 fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro::TokenStream> {
     let syn::DeriveInput { attrs, .. } = syn::parse(input).unwrap();
 
-    let mut groups = group_attrs(&attrs);
+    let mut attr_groups = group_attrs(&attrs);
 
-    for attr in groups.remove("exact_token").unwrap() {
-        let token = Token::exact_token(attr.to_owned())?;
+    for attr in attr_groups.remove("exact_token").unwrap() {
+        let token = TokenInfo::exact_token(attr)?;
         eprintln!("{:#?}", token);
     }
 
-    for attr in groups.remove("regex_token").unwrap() {
-        let token = Token::regex_token(attr.to_owned())?;
+    for attr in attr_groups.remove("regex_token").unwrap() {
+        let token = TokenInfo::regex_token(attr)?;
         eprintln!("{:#?}", token);
     }
 
-    for attr in groups.remove("ignore_pattern").unwrap() {
-        let token = Token::ignore_pattern(attr.to_owned())?;
+    for attr in attr_groups.remove("ignore_pattern").unwrap() {
+        let token = TokenInfo::ignore_pattern(attr)?;
         eprintln!("{:#?}", token);
     }
 

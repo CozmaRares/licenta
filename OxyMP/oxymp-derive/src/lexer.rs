@@ -24,13 +24,13 @@ pub struct IgnorePattern {
 }
 
 #[derive(Debug)]
-pub enum Token {
+pub enum TokenInfo {
     Exact(ExactToken),
     Regex(RegexToken),
     Ignore(IgnorePattern),
 }
 
-impl Token {
+impl TokenInfo {
     //#[exact_token(name = "Minus", pattern = "-")]
     pub fn exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
         let mut expected_properties = HashSet::new();
@@ -43,7 +43,7 @@ impl Token {
             expected_properties,
         )?;
 
-        return Ok(Token::Exact(ExactToken {
+        return Ok(TokenInfo::Exact(ExactToken {
             name: map.get("name").unwrap().to_string(),
             pattern: map.get("pattern").unwrap().to_string(),
         }));
@@ -63,7 +63,7 @@ impl Token {
             expected_properties,
         )?;
 
-        return Ok(Token::Regex(RegexToken {
+        return Ok(TokenInfo::Regex(RegexToken {
             name: map.get("name").unwrap().to_string(),
             regex: map.get("regex").unwrap().to_string(),
             transformer_fn: map.get("transformer_fn").unwrap().to_string(),
@@ -82,7 +82,7 @@ impl Token {
             expected_properties,
         )?;
 
-        return Ok(Token::Ignore(IgnorePattern {
+        return Ok(TokenInfo::Ignore(IgnorePattern {
             regex: map.get("regex").unwrap().to_string(),
         }));
     }
