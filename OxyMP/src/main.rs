@@ -4,10 +4,6 @@ fn match_number(matched: &str) -> i64 {
     matched.parse().unwrap()
 }
 
-fn match_ws(matched: &str) -> String {
-    matched.to_string()
-}
-
 #[derive(RecursiveDescent)]
 #[exact_token(name = "ParanLeft", pattern = "(")]
 #[exact_token(name = "ParanRight", pattern = ")")]

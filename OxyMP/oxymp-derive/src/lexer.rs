@@ -108,7 +108,7 @@ impl Lexer {
     fn generate_def() -> proc_macro2::TokenStream {
         return quote! {
             enum TokenMatcher {
-                ExactMatch(::std::string::String),
+                Exact(::std::string::String),
                 Regex(::regex::Regex),
             }
 
@@ -134,7 +134,7 @@ impl Lexer {
             impl LexRule {
                 fn matches(&self, input: &::core::primitive::str) -> std::option::Option<::core::primitive::usize> {
                     match &self.matcher {
-                        TokenMatcher::ExactMatch(exact_match) => {
+                        TokenMatcher::Exact(exact_match) => {
                             input.starts_with(exact_match).then(|| exact_match.len())
                         }
                         TokenMatcher::Regex(re) => {
@@ -170,7 +170,7 @@ impl Lexer {
                 pub message: String,
                 pub input: &'a str,
             }
-            
+
             pub struct Lexer {
                 rules: Vec<LexRule>,
             }
@@ -255,6 +255,58 @@ impl Lexer {
     }
 
     fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
-        return quote! {};
+        let rules: Vec<_> = token_info
+            .iter()
+            .map(|tok| match tok {
+                TokenInfo::Exact(ExactToken { name, pattern }) => {
+                    let ident = format_ident!("{}", name);
+                    let struct_ident = format_ident!("Token_{}", name);
+
+                    return quote! {
+                        LexRule {
+                            matcher: TokenMatcher::Exact(#pattern.to_string()),
+                            handler: TokenHandler::Token(Box::new(|| Token::#ident(#struct_ident)))
+                        }
+                    };
+                }
+                TokenInfo::Regex(RegexToken {
+                    name,
+                    regex,
+                    transformer_fn,
+                    ..
+                }) => {
+                    let ident = format_ident!("{}", name);
+                    let struct_ident = format_ident!("Token_{}", name);
+                    let fn_ident = format_ident!("{}", transformer_fn);
+
+                    return quote! {
+                        LexRule {
+                            matcher: TokenMatcher::regex(#regex).unwrap(),
+                            handler: TokenHandler::Regex(
+                                Box::new(
+                                    |matched| Token::#ident(#struct_ident(crate::#fn_ident(matched)))
+                                )
+                            )
+
+                        }
+                    };
+                }
+
+                TokenInfo::Ignore(IgnorePattern { regex }) => quote! {
+                    LexRule {
+                        matcher: TokenMatcher::regex(#regex).unwrap(),
+                        handler: TokenHandler::Ignore
+                    }
+                },
+            })
+            .collect();
+
+        return quote! {
+            impl Lexer {
+                pub fn new() -> Self {
+                    return Lexer {rules: vec![#(#rules),*] };
+                }
+            }
+        };
     }
 }
