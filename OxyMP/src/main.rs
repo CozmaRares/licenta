@@ -20,4 +20,10 @@ fn match_number(matched: &str) -> i64 {
 #[grammar = "expr -> Number (('+' | '-') expr)?"]
 struct Parser;
 
-fn main() {}
+fn main() {
+    let l = lexer::Lexer::new();
+
+    let a = l.tokenize("1+2");
+
+    eprintln!("{:#?}", a);
+}
