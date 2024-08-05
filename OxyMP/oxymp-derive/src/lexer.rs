@@ -90,6 +90,9 @@ impl TokenInfo {
 
 pub struct Lexer;
 
+// TODO: refactor lexer generation logic
+// share identifiers between tokens and lex rules
+
 impl Lexer {
     pub fn generate(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
         let lexer_def = Lexer::generate_def();
@@ -138,14 +141,11 @@ impl Lexer {
                             input.starts_with(exact_match).then(|| exact_match.len())
                         }
                         TokenMatcher::Regex(re) => {
-                            let captures = re.captures(input);
-                            if captures.is_none() {
-                                return ::std::option::Option::None;
-                            }
-                            match captures.unwrap().get(0) {
-                                ::std::option::Option::Some(matched) => ::std::option::Option::Some(matched.end() - matched.start()),
-                                ::std::option::Option::None => ::std::option::Option::None
-                            }
+                            re
+                                .captures(input)
+                                .map(|captures| captures.get(0))
+                                .flatten()
+                                .map(|matched| matched.end() - matched.start())
                         }
                     }
                 }
@@ -156,7 +156,7 @@ impl Lexer {
                 ) -> ::std::option::Option<(::std::option::Option<Token>, &'a ::core::primitive::str)> {
                     self.matches(input).map(|matched_size| {
                         let token = match &self.handler {
-                            TokenHandler::Ignore => ::std::option::Option::None ,
+                            TokenHandler::Ignore   => ::std::option::Option::None ,
                             TokenHandler::Token(t) => ::std::option::Option::Some(t()),
                             TokenHandler::Regex(l) => ::std::option::Option::Some(l(&input[..matched_size])),
                         };
@@ -168,8 +168,8 @@ impl Lexer {
 
             #[derive(::std::fmt::Debug)]
             pub struct LexError<'a> {
+                pub input:   &'a ::core::primitive::str,
                 pub message: ::std::string::String,
-                pub input: &'a ::core::primitive::str,
             }
 
             pub struct Lexer {
@@ -193,8 +193,8 @@ impl Lexer {
                         }
                         if !was_consumed {
                             return ::std::result::Result::Err(LexError {
-                                message: "Unknown token".to_string(),
                                 input,
+                                message: "Unknown token".to_string(),
                             });
                         }
                     }
@@ -235,7 +235,7 @@ impl Lexer {
 
                 let struct_def = quote! {
                     #[derive(::std::fmt::Debug)]
-                    pub struct #struct_ident #inner_type;
+                    pub struct #struct_ident #inner_type ;
                 };
 
                 return (enum_entry, struct_def);
@@ -302,7 +302,7 @@ impl Lexer {
         return quote! {
             impl Lexer {
                 pub fn new() -> Self {
-                    return Lexer {rules: ::std::vec![#(#rules),*] };
+                    return Lexer { rules: ::std::vec![#(#rules),*] };
                 }
             }
         };
