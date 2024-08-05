@@ -4,8 +4,6 @@ use quote::{format_ident, quote};
 
 use crate::attribute::AttributeList;
 
-//#[ignore_pattern(regex = r"\s+")]
-
 #[derive(Debug)]
 pub struct ExactToken {
     name: String,
@@ -101,7 +99,7 @@ impl Lexer {
             }
 
             impl TokenMatcher {
-                pub fn regex(re: &str) -> ::std::result::Result<Self, ::regex::Error> {
+                pub fn regex(re: &::core::primitive::str) -> ::std::result::Result<Self, ::regex::Error> {
                     let re = ::std::format!("^{re}");
                     let re = ::regex::Regex::new(&re);
 
@@ -111,7 +109,7 @@ impl Lexer {
 
             pub enum TokenHandler {
                 ExactToken(Token),
-                Regex(Box<dyn Fn(&str) -> Token>),
+                Regex(::std::boxed::Box<dyn ::std::ops::Fn(&::core::primitive::str) -> Token>),
                 Ignore,
             }
 
@@ -121,25 +119,50 @@ impl Lexer {
     pub fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
         let token_info = token_info.iter();
 
-        let tokens: Vec<proc_macro2::Ident> = token_info
+        let (enum_entries, structs) = token_info
             .filter(|info| match info {
-                TokenInfo::Ignore(_) => false,
-                _ => true,
+                TokenInfo::Exact(_) => true,
+                TokenInfo::Regex(_) => true,
+                _ => false,
             })
             .map(|info| match info {
-                TokenInfo::Exact(ExactToken { name, .. }) => name,
-                TokenInfo::Regex(RegexToken { name, .. }) => name,
+                TokenInfo::Exact(ExactToken { name, .. }) => (name, None),
+                TokenInfo::Regex(RegexToken { name, kind, .. }) => (name, Some(kind)),
                 _ => unreachable!(),
             })
-            .map(|name| format_ident!("{}", name))
-            .collect();
+            .map(|(name, kind)| {
+                let ident = format_ident!("{}", name);
+                let struct_ident = format_ident!("Token_{}", name);
 
-        eprintln!("{:#?}", tokens);
+                let enum_entry = quote! {
+                    #ident(#struct_ident)
+                };
+
+                let mut inner_type = quote! {};
+
+                if let Some(kind) = kind {
+                    let kind = format_ident!("{}", kind);
+                    inner_type = quote! { (pub #kind) };
+                }
+
+                let struct_def = quote! {
+                    #[derive(Debug)]
+                    pub struct #struct_ident #inner_type;
+                };
+
+                return (enum_entry, struct_def);
+            })
+            .fold((Vec::new(), Vec::new()), |(mut vec1, mut vec2), (x, y)| {
+                vec1.push(x);
+                vec2.push(y);
+                (vec1, vec2)
+            });
 
         return quote! {
+            #(#structs)*
+
             pub enum Token {
-                __internal_NULL__,
-                #(#tokens),*
+                #(#enum_entries),*
             }
         };
     }
