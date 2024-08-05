@@ -91,32 +91,119 @@ impl TokenInfo {
 pub struct Lexer;
 
 impl Lexer {
-    pub fn generate_def() -> proc_macro2::TokenStream {
+    pub fn generate(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+        let lexer_def = Lexer::generate_def();
+        let token_def = Lexer::generate_tokens(&token_info);
+        let lex_rules = Lexer::generate_rules(&token_info);
+
         return quote! {
-            pub enum TokenMatcher {
+            pub mod lexer {
+                #lexer_def
+                #token_def
+                #lex_rules
+            }
+        };
+    }
+
+    fn generate_def() -> proc_macro2::TokenStream {
+        return quote! {
+            enum TokenMatcher {
                 ExactMatch(::std::string::String),
                 Regex(::regex::Regex),
             }
 
             impl TokenMatcher {
-                pub fn regex(re: &::core::primitive::str) -> ::std::result::Result<Self, ::regex::Error> {
+                fn regex(re: &::core::primitive::str) -> ::std::result::Result<Self, ::regex::Error> {
                     let re = ::std::format!("^{re}");
                     let re = ::regex::Regex::new(&re);
-
                     return re.map(|re| TokenMatcher::Regex(re));
                 }
             }
 
-            pub enum TokenHandler {
-                ExactToken(Token),
+            enum TokenHandler {
+                Token(::std::boxed::Box<dyn ::std::ops::Fn() -> Token>),
                 Regex(::std::boxed::Box<dyn ::std::ops::Fn(&::core::primitive::str) -> Token>),
                 Ignore,
             }
 
+            struct LexRule {
+                matcher: TokenMatcher,
+                handler: TokenHandler,
+            }
+
+            impl LexRule {
+                fn matches(&self, input: &::core::primitive::str) -> std::option::Option<::core::primitive::usize> {
+                    match &self.matcher {
+                        TokenMatcher::ExactMatch(exact_match) => {
+                            input.starts_with(exact_match).then(|| exact_match.len())
+                        }
+                        TokenMatcher::Regex(re) => {
+                            let captures = re.captures(input);
+                            if captures.is_none() {
+                                return None;
+                            }
+                            match captures.unwrap().get(0) {
+                                Some(matched) => Some(matched.end() - matched.start()),
+                                None => None
+                            }
+                        }
+                    }
+                }
+
+                fn consume<'a>(
+                    &self,
+                    input: &'a str,
+                ) -> ::std::option::Option<(::std::option::Option<Token>, &'a ::core::primitive::str)> {
+                    self.matches(input).map(|matched_size| {
+                        let token = match &self.handler {
+                            TokenHandler::Ignore => None ,
+                            TokenHandler::Token(t) => Some(t()),
+                            TokenHandler::Regex(l) => Some(l(&input[..matched_size])),
+                        };
+                        return Some((token, &input[matched_size..]));
+                    })?
+                }
+
+            }
+
+            pub struct LexError<'a> {
+                pub message: String,
+                pub input: &'a str,
+            }
+            
+            pub struct Lexer {
+                rules: Vec<LexRule>,
+            }
+
+            impl Lexer {
+                pub fn tokenize(self, mut input: &str) -> Result<Vec<Token>, LexError> {
+                    let mut tokens = Vec::new();
+                    while input.len() > 0 {
+                        let mut was_consumed = false;
+                        for rule in &self.rules {
+                            if let Some((token, remaining)) = rule.consume(input) {
+                                if let Some(token) = token {
+                                    tokens.push(token);
+                                }
+                                input = remaining;
+                                was_consumed = true;
+                                break;
+                            }
+                        }
+                        if !was_consumed {
+                            return Err(LexError {
+                                message: "Unknown token".to_string(),
+                                input,
+                            });
+                        }
+                    }
+                    return Ok(tokens);
+                }
+            }
         };
     }
 
-    pub fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+    fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
         let token_info = token_info.iter();
 
         let (enum_entries, structs) = token_info
@@ -165,5 +252,9 @@ impl Lexer {
                 #(#enum_entries),*
             }
         };
+    }
+
+    fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+        return quote! {};
     }
 }
