@@ -31,6 +31,38 @@ pub enum TokenInfo {
 }
 
 impl TokenInfo {
+    fn enum_entry_ident(name: &String) -> proc_macro2::Ident {
+        return format_ident!("{}", name);
+    }
+
+    fn struct_ident(name: &String) -> proc_macro2::Ident {
+        return format_ident!("Token_{}", name);
+    }
+
+    fn generate_idents(
+        &self,
+    ) -> Option<(
+        proc_macro2::Ident,
+        proc_macro2::Ident,
+        Option<proc_macro2::Ident>,
+    )> {
+        match self {
+            TokenInfo::Exact(ExactToken { name, .. }) => Some((
+                TokenInfo::enum_entry_ident(name),
+                TokenInfo::struct_ident(name),
+                None,
+            )),
+            TokenInfo::Regex(RegexToken { name, kind, .. }) => Some((
+                TokenInfo::enum_entry_ident(name),
+                TokenInfo::struct_ident(name),
+                Some(format_ident!("{}", kind)),
+            )),
+            _ => None,
+        }
+    }
+}
+
+impl TokenInfo {
     //#[exact_token(name = "Minus", pattern = "-")]
     pub fn exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
         let mut expected_properties = HashSet::new();
@@ -89,9 +121,6 @@ impl TokenInfo {
 }
 
 pub struct Lexer;
-
-// TODO: refactor lexer generation logic
-// share identifiers between tokens and lex rules
 
 impl Lexer {
     pub fn generate(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
@@ -163,7 +192,6 @@ impl Lexer {
                         return ::std::option::Option::Some((token, &input[matched_size..]));
                     })?
                 }
-
             }
 
             #[derive(::std::fmt::Debug)]
@@ -205,46 +233,28 @@ impl Lexer {
     }
 
     fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
-        let token_info = token_info.iter();
+        let idents = token_info
+            .iter()
+            .map(|info| info.generate_idents())
+            .filter(|opt| opt.is_some())
+            .map(|idents| idents.unwrap());
 
-        let (enum_entries, structs) = token_info
-            .filter(|info| match info {
-                TokenInfo::Exact(_) => true,
-                TokenInfo::Regex(_) => true,
-                _ => false,
-            })
-            .map(|info| match info {
-                TokenInfo::Exact(ExactToken { name, .. }) => (name, None),
-                TokenInfo::Regex(RegexToken { name, kind, .. }) => (name, Some(kind)),
-                _ => unreachable!(),
-            })
-            .map(|(name, kind)| {
-                let ident = format_ident!("{}", name);
-                let struct_ident = format_ident!("Token_{}", name);
+        let enum_entries = idents.clone().map(|(enum_entry, struct_ident, _)| {
+            return quote! {
+                #enum_entry(#struct_ident)
+            };
+        });
 
-                let enum_entry = quote! {
-                    #ident(#struct_ident)
-                };
-
-                let mut inner_type = quote! {};
-
-                if let Some(kind) = kind {
-                    let kind = format_ident!("{}", kind);
-                    inner_type = quote! { (pub #kind) };
-                }
-
-                let struct_def = quote! {
-                    #[derive(::std::fmt::Debug)]
-                    pub struct #struct_ident #inner_type ;
-                };
-
-                return (enum_entry, struct_def);
-            })
-            .fold((Vec::new(), Vec::new()), |(mut vec1, mut vec2), (x, y)| {
-                vec1.push(x);
-                vec2.push(y);
-                (vec1, vec2)
-            });
+        let structs = idents.map(|idents| match idents {
+            (_, struct_ident, None) => quote! {
+                #[derive(::std::fmt::Debug)]
+                pub struct #struct_ident;
+            },
+            (_, struct_ident, Some(kind_ident)) => quote! {
+                #[derive(::std::fmt::Debug)]
+                pub struct #struct_ident(pub #kind_ident);
+            },
+        });
 
         return quote! {
             #(#structs)*
