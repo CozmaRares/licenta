@@ -12,17 +12,17 @@ pub struct Spanned<T> {
 }
 
 #[derive(Debug)]
-pub struct KeyValue {
+pub struct NameValue {
     pub name: Spanned<String>,
     pub value: String,
 }
 
-impl Parse for KeyValue {
+impl Parse for NameValue {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let name: syn::Ident = input.parse()?;
         let _eq: syn::Token![=] = input.parse()?;
         let value: syn::LitStr = input.parse()?;
-        return Ok(KeyValue {
+        return Ok(NameValue {
             name: Spanned {
                 content: name.to_string(),
                 span: name.span(),
@@ -35,7 +35,7 @@ impl Parse for KeyValue {
 #[derive(Debug)]
 pub struct AttributeList {
     pub attr: Spanned<String>,
-    pub pairs: Vec<KeyValue>,
+    pub pairs: Vec<NameValue>,
 }
 
 impl Parse for AttributeList {
@@ -51,7 +51,7 @@ impl Parse for AttributeList {
         let content_parenthesized;
         let _parenthesized = syn::parenthesized!(content_parenthesized in content_bracketed);
 
-        type CommaSeparated = Punctuated<KeyValue, syn::Token![,]>;
+        type CommaSeparated = Punctuated<NameValue, syn::Token![,]>;
         let pairs = CommaSeparated::parse_terminated(&content_parenthesized)?;
 
         return Ok(AttributeList {
@@ -65,9 +65,9 @@ impl Parse for AttributeList {
 }
 
 #[derive(Debug)]
-pub struct AttributeKeyValue(pub KeyValue);
+pub struct AttributeNameValue(pub NameValue);
 
-impl Parse for AttributeKeyValue {
+impl Parse for AttributeNameValue {
     /// Parse `#[attr = "1"]`
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let _hash: syn::Token![#] = input.parse()?;
@@ -75,9 +75,9 @@ impl Parse for AttributeKeyValue {
         let content_bracketed;
         let _bracketed = syn::bracketed!(content_bracketed in input);
 
-        let key_value: KeyValue = content_bracketed.parse()?;
+        let key_value: NameValue = content_bracketed.parse()?;
 
-        return Ok(AttributeKeyValue(key_value));
+        return Ok(AttributeNameValue(key_value));
     }
 }
 
@@ -102,7 +102,7 @@ impl AttributeList {
         let mut found_properties: HashSet<&String> = HashSet::new();
 
         for pair in &parsed_attribute.pairs {
-            let KeyValue { name, .. } = pair;
+            let NameValue { name, .. } = pair;
 
             if !expected_properties.contains(&name.content) {
                 return Err(syn::Error::new(
@@ -132,7 +132,7 @@ impl AttributeList {
 
         return Ok(parsed_attribute.pairs.iter().fold(
             HashMap::new(),
-            |mut acc, KeyValue { name, value }| {
+            |mut acc, NameValue { name, value }| {
                 acc.insert(name.content.clone(), value.to_string());
                 acc
             },

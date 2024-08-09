@@ -1,11 +1,15 @@
 mod attribute;
+mod grammar;
 mod lexer;
 
 use std::collections::HashMap;
 
+use attribute::{AttributeNameValue, NameValue};
 use quote::{quote, ToTokens};
+use syn::spanned::Spanned;
 
-use crate::lexer::*;
+use crate::grammar::data::GrammarRule;
+use crate::lexer::{Lexer, TokenInfo};
 
 fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::TokenStream>> {
     return attrs.iter().fold(HashMap::new(), |mut acc, attr| {
@@ -19,13 +23,9 @@ fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::
     });
 }
 
-fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
-    let syn::DeriveInput { attrs, .. } = syn::parse(input).unwrap();
-
-    let mut attr_groups = group_attrs(&attrs);
-
-    let _grammar = attr_groups.remove("grammar");
-
+fn parse_token_attrs(
+    attr_groups: HashMap<String, Vec<proc_macro2::TokenStream>>,
+) -> syn::Result<Vec<TokenInfo>> {
     type CreateTokenInfo = dyn Fn(proc_macro2::TokenStream) -> syn::Result<TokenInfo>;
     let mut token_type_handlers: HashMap<String, &CreateTokenInfo> = HashMap::new();
     token_type_handlers.insert("exact_token".to_string(), &TokenInfo::exact_token);
@@ -42,6 +42,37 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
             }
         }
     }
+
+    return Ok(token_info);
+}
+
+fn parse_grammar_attrs(
+    grammar_attrs: Vec<proc_macro2::TokenStream>,
+) -> syn::Result<Vec<GrammarRule>> {
+    let mut rules = Vec::new();
+
+    for attr in grammar_attrs {
+        let AttributeNameValue(NameValue { value, .. }) = syn::parse2(attr)?;
+        rules.push(GrammarRule { rule: value });
+    }
+
+    return Ok(rules);
+}
+
+fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
+    let ast: syn::DeriveInput = syn::parse(input).unwrap();
+
+    let mut attr_groups = group_attrs(&ast.attrs);
+
+    let grammar_attrs = match attr_groups.remove("grammar") {
+        Some(v) => v,
+        None => return Err(syn::Error::new(ast.span(), "Missing grammar rules.")),
+    };
+    let grammar_rules = parse_grammar_attrs(grammar_attrs);
+
+    eprintln!("{:#?}", grammar_rules);
+
+    let token_info = parse_token_attrs(attr_groups)?;
 
     let lexer = Lexer::generate(&token_info);
 
