@@ -8,7 +8,7 @@ use attribute::{AttributeNameValue, NameValue};
 use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 
-use crate::grammar::data::GrammarRule;
+use crate::grammar::{GrammarNode, GrammarRule};
 use crate::lexer::{Lexer, TokenInfo};
 
 fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::TokenStream>> {
@@ -53,7 +53,7 @@ fn parse_grammar_attrs(
 
     for attr in grammar_attrs {
         let AttributeNameValue(NameValue { value, .. }) = syn::parse2(attr)?;
-        rules.push(GrammarRule { rule: value });
+        rules.push(GrammarRule::new(&value));
     }
 
     return Ok(rules);
