@@ -1,4 +1,5 @@
 mod attribute;
+mod combinators;
 mod grammar;
 mod lexer;
 
