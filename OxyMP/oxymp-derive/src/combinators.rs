@@ -2,13 +2,13 @@
 
 use std::collections::HashSet;
 
-pub type ParseResult<'a, Out> = Result<(&'a str, Out), ParseError<'a>>;
+pub type ParseResult<'a, Out> = Result<(&'a str, Out), ParseError>;
 
 #[derive(Debug)]
-pub enum ParseErrorDetails<'a> {
+pub enum ParseErrorDetails {
     EOI,
-    None,
-    Unexpected { expected: &'a str, found: &'a str },
+    NotSatisfied,
+    Unexpected { expected: String, found: String },
 }
 
 #[derive(Debug)]
@@ -23,9 +23,9 @@ pub enum ParserKind {
 }
 
 #[derive(Debug)]
-pub struct ParseError<'a> {
+pub struct ParseError {
     pub kind: ParserKind,
-    pub details: ParseErrorDetails<'a>,
+    pub details: ParseErrorDetails,
 }
 
 fn truncate(s: &str) -> String {
@@ -61,7 +61,7 @@ pub fn satisfies<'a>(
             true => Ok((remaining, ch)),
             false => Err(ParseError {
                 kind: ParserKind::Satisfy,
-                details: ParseErrorDetails::None,
+                details: ParseErrorDetails::NotSatisfied,
             }),
         })?
     }
@@ -71,7 +71,13 @@ pub fn alpha<'a>() -> impl Fn(&'a str) -> ParseResult<'a, char> {
     |input| {
         satisfies(|c| c.is_alphabetic())(input).map_err(|e| ParseError {
             kind: ParserKind::Alpha,
-            details: e.details,
+            details: match e.details {
+                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
+                    expected: "alphabetic".to_string(),
+                    found: truncate(input),
+                },
+                _ => e.details,
+            },
         })
     }
 }
@@ -80,29 +86,47 @@ pub fn digit<'a>(radix: u32) -> impl Fn(&'a str) -> ParseResult<'a, char> {
     move |input| {
         satisfies(|c| c.is_digit(radix))(input).map_err(|e| ParseError {
             kind: ParserKind::Digit,
-            details: e.details,
+            details: match e.details {
+                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
+                    expected: "digit".to_string(),
+                    found: truncate(input),
+                },
+                _ => e.details,
+            },
         })
     }
 }
 
 pub fn one_of<'a>(list: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    let list = list.chars().collect::<HashSet<char>>();
+    let set = list.chars().collect::<HashSet<char>>();
 
     move |input| {
-        satisfies(|c| list.contains(&c))(input).map_err(|e| ParseError {
+        satisfies(|c| set.contains(&c))(input).map_err(|e| ParseError {
             kind: ParserKind::OneOf,
-            details: e.details,
+            details: match e.details {
+                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
+                    expected: format!("one of: {}", set.iter().collect::<String>()),
+                    found: truncate(input),
+                },
+                _ => e.details,
+            },
         })
     }
 }
 
 pub fn none_of<'a>(list: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    let list = list.chars().collect::<HashSet<char>>();
+    let set = list.chars().collect::<HashSet<char>>();
 
     move |input| {
-        satisfies(|c| !list.contains(&c))(input).map_err(|e| ParseError {
+        satisfies(|c| !set.contains(&c))(input).map_err(|e| ParseError {
             kind: ParserKind::NoneOf,
-            details: e.details,
+            details: match e.details {
+                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
+                    expected: format!("none of: {}", set.iter().collect::<String>()),
+                    found: truncate(input),
+                },
+                _ => e.details,
+            },
         })
     }
 }
@@ -124,8 +148,8 @@ pub fn tag<'a>(tag: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, &'a str> {
             Err(ParseError {
                 kind: ParserKind::Tag,
                 details: ParseErrorDetails::Unexpected {
-                    expected: tag,
-                    found: to_match,
+                    expected: tag.to_string(),
+                    found: to_match.to_string(),
                 },
             })
         }
