@@ -7,7 +7,7 @@ pub type ParseResult<'a, Out> = Result<(&'a str, Out), ParseError<'a>>;
 
 pub type Parser<'a, Out> = Rc<dyn Fn(&'a str) -> ParseResult<'a, Out> + 'a>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseErrorDetails {
     EOI,
     NotSatisfied,
@@ -15,7 +15,7 @@ pub enum ParseErrorDetails {
     ChoicesFailed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParserKind {
     Char,
     Satisfies,
@@ -212,4 +212,182 @@ pub fn sequence<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Vec<Out>>
 
         return Ok((input, ret));
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use core::panic;
+
+    use super::*;
+
+    fn trace_ends_with_kind(trace: &Vec<ParserKind>, kind: ParserKind) {
+        let last = trace
+            .iter()
+            .last()
+            .expect("Trace must have at least 1 parser");
+        assert_eq!(last, &kind);
+    }
+
+    mod char_tests {
+        use super::*;
+
+        #[test]
+        fn success_single_char() {
+            let parser = char();
+            let input = "a";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("", 'a'));
+        }
+
+        #[test]
+        fn success_multiple_chars() {
+            let parser = char();
+            let input = "abc";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("bc", 'a'));
+        }
+
+        #[test]
+        fn utf8_success() {
+            let parser = char();
+            let input = "🙂bc";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("bc", '🙂'));
+        }
+
+        #[test]
+        fn whitespace() {
+            let parser = char();
+            let input = " a";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("a", ' '));
+        }
+
+        #[test]
+        fn empty_input() {
+            let parser = char();
+            let input = "";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Char);
+            assert_eq!(error.details, ParseErrorDetails::EOI);
+            assert_eq!(error.input, input);
+        }
+    }
+
+    mod satisfies_tests {
+        use super::*;
+
+        #[test]
+        fn success() {
+            let parser = satisfies(|ch| ch.is_ascii_digit());
+            let input = "123";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("23", '1'));
+        }
+
+        #[test]
+        fn fail() {
+            let parser = satisfies(|ch| ch.is_ascii_digit());
+            let input = "abc";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Satisfies);
+            assert_eq!(error.details, ParseErrorDetails::NotSatisfied);
+            assert_eq!(error.input, input);
+        }
+
+        #[test]
+        fn empty_input() {
+            let parser = satisfies(|ch| ch.is_ascii_digit());
+            let input = "";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Satisfies);
+            assert_eq!(error.details, ParseErrorDetails::EOI);
+            assert_eq!(error.input, input);
+        }
+
+        #[test]
+        fn utf8_success() {
+            let parser = satisfies(|ch| ch == '🙂');
+            let input = "🙂bc";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("bc", '🙂'));
+        }
+    }
+
+    mod alpha_tests {
+        use super::*;
+
+        #[test]
+        fn success_lowercase() {
+            let parser = alpha();
+            let input = "abc";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("bc", 'a'));
+        }
+
+        #[test]
+        fn success_uppercase() {
+            let parser = alpha();
+            let input = "ABC";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("BC", 'A'));
+        }
+
+        #[test]
+        fn success_non_ascii() {
+            let parser = alpha();
+            let input = "鈴木雅之";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("木雅之", '鈴'));
+        }
+
+        #[test]
+        fn failure_non_alpha() {
+            let parser = alpha();
+            let input = "123";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Alpha);
+            assert_eq!(
+                error.details,
+                ParseErrorDetails::Unexpected {
+                    expected: "alphabetic".to_string(),
+                    found: truncate(input)
+                }
+            );
+            assert_eq!(error.input, input);
+        }
+
+        #[test]
+        fn empty_input() {
+            let parser = alpha();
+            let input = "";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Alpha);
+            assert_eq!(error.details, ParseErrorDetails::EOI);
+            assert_eq!(error.input, input);
+        }
+
+        #[test]
+        fn success_mixed_input() {
+            let parser = alpha();
+            let input = "a1b2c3";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("1b2c3", 'a'));
+        }
+    }
 }
