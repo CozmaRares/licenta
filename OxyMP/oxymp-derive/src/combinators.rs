@@ -12,6 +12,7 @@ pub enum ParseErrorDetails {
     EOI,
     NotSatisfied,
     Unexpected { expected: String, found: String },
+    ChoicesFailed,
 }
 
 #[derive(Debug)]
@@ -23,6 +24,7 @@ pub enum ParserKind {
     OneOf,
     NoneOf,
     Tag,
+    Choice,
 }
 
 #[derive(Debug)]
@@ -156,5 +158,37 @@ pub fn tag<'a>(tag: &'a str) -> Parser<'a, &'a str> {
                 },
             })
         }
+    })
+}
+
+pub fn choice<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Out> {
+    Rc::new(move |input| {
+        for choice in choices {
+            let result = choice(input);
+
+            if result.is_ok() {
+                return result;
+            }
+        }
+
+        Err(ParseError {
+            kind: ParserKind::Choice,
+            details: ParseErrorDetails::ChoicesFailed,
+        })
+    })
+}
+
+pub fn sequence<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Vec<Out>> {
+    Rc::new(move |input| {
+        let mut ret = Vec::new();
+        let mut input = input;
+
+        for choice in choices {
+            let result = choice(input)?;
+            input = result.0;
+            ret.push(result.1);
+        }
+
+        return Ok((input, ret));
     })
 }
