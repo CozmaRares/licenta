@@ -364,7 +364,7 @@ mod tests {
                 error.details,
                 ParseErrorDetails::Unexpected {
                     expected: "alphabetic".to_string(),
-                    found: input[..1].to_string(),
+                    found: "1".to_string(),
                 }
             );
             assert_eq!(error.input, input);
@@ -388,6 +388,73 @@ mod tests {
             let value = parser(input).expect("value");
 
             assert_eq!(value, ("1b2c3", 'a'));
+        }
+    }
+
+    mod digit_tests {
+        use super::*;
+
+        #[test]
+        fn decimal() {
+            let parser = digit(10);
+            let input = "5abc";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("abc", '5'));
+        }
+
+        #[test]
+        fn invalid_input() {
+            let parser = digit(10);
+            let input = "x123";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Digit);
+            assert_eq!(
+                error.details,
+                ParseErrorDetails::Unexpected {
+                    expected: "digit".to_string(),
+                    found: "x".to_string(),
+                }
+            );
+            assert_eq!(error.input, input);
+        }
+
+        #[test]
+        fn empty_input() {
+            let parser = digit(10);
+            let input = "";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Digit);
+            assert_eq!(error.details, ParseErrorDetails::EOI);
+            assert_eq!(error.input, input);
+        }
+
+        #[test]
+        fn hex() {
+            let parser = digit(16);
+            let input = "fF123";
+            let value = parser(input).expect("value");
+
+            assert_eq!(value, ("F123", 'f'));
+        }
+
+        #[test]
+        fn invalid_digit_for_radix() {
+            let parser = digit(8);
+            let input = "89abc";
+            let error = parser(input).expect_err("error");
+
+            trace_ends_with_kind(&error.trace, ParserKind::Digit);
+            assert_eq!(
+                error.details,
+                ParseErrorDetails::Unexpected {
+                    expected: "digit".to_string(),
+                    found: "8".to_string(),
+                }
+            );
+            assert_eq!(error.input, input);
         }
     }
 }
