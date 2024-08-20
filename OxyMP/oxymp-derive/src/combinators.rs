@@ -1,8 +1,11 @@
 #![allow(dead_code)]
 
 use std::collections::HashSet;
+use std::rc::Rc;
 
 pub type ParseResult<'a, Out> = Result<(&'a str, Out), ParseError>;
+
+pub type Parser<'a, Out> = Rc<dyn Fn(&'a str) -> ParseResult<'a, Out> + 'a>;
 
 #[derive(Debug)]
 pub enum ParseErrorDetails {
@@ -38,8 +41,8 @@ fn truncate(s: &str) -> String {
     }
 }
 
-pub fn char<'a>() -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    |input| {
+pub fn char<'a>() -> Parser<'a, char> {
+    Rc::new(|input| {
         let mut chars = input.chars();
         if let Some(first_char) = chars.next() {
             let remainder = &input[first_char.len_utf8()..];
@@ -50,13 +53,11 @@ pub fn char<'a>() -> impl Fn(&'a str) -> ParseResult<'a, char> {
                 details: ParseErrorDetails::EOI,
             })
         }
-    }
+    })
 }
 
-pub fn satisfies<'a>(
-    predicate: impl Fn(char) -> bool,
-) -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    move |input| {
+pub fn satisfies<'a>(predicate: impl Fn(char) -> bool + 'a) -> Parser<'a, char> {
+    Rc::new(move |input| {
         char()(input).map(|(remaining, ch)| match predicate(ch) {
             true => Ok((remaining, ch)),
             false => Err(ParseError {
@@ -64,11 +65,11 @@ pub fn satisfies<'a>(
                 details: ParseErrorDetails::NotSatisfied,
             }),
         })?
-    }
+    })
 }
 
-pub fn alpha<'a>() -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    |input| {
+pub fn alpha<'a>() -> Parser<'a, char> {
+    Rc::new(|input| {
         satisfies(|c| c.is_alphabetic())(input).map_err(|e| ParseError {
             kind: ParserKind::Alpha,
             details: match e.details {
@@ -79,12 +80,12 @@ pub fn alpha<'a>() -> impl Fn(&'a str) -> ParseResult<'a, char> {
                 _ => e.details,
             },
         })
-    }
+    })
 }
 
-pub fn digit<'a>(radix: u32) -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    move |input| {
-        satisfies(|c| c.is_digit(radix))(input).map_err(|e| ParseError {
+pub fn digit<'a>(radix: u32) -> Parser<'a, char> {
+    Rc::new(move |input| {
+        satisfies(move |c| c.is_digit(radix))(input).map_err(|e| ParseError {
             kind: ParserKind::Digit,
             details: match e.details {
                 ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
@@ -94,14 +95,15 @@ pub fn digit<'a>(radix: u32) -> impl Fn(&'a str) -> ParseResult<'a, char> {
                 _ => e.details,
             },
         })
-    }
+    })
 }
 
-pub fn one_of<'a>(list: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    let set = list.chars().collect::<HashSet<char>>();
+pub fn one_of<'a>(list: &'a str) -> Parser<'a, char> {
+    let set = Rc::new(list.chars().collect::<HashSet<char>>());
 
-    move |input| {
-        satisfies(|c| set.contains(&c))(input).map_err(|e| ParseError {
+    Rc::new(move |input| {
+        let set_clone = set.clone();
+        satisfies(move |c| set_clone.contains(&c))(input).map_err(|e| ParseError {
             kind: ParserKind::OneOf,
             details: match e.details {
                 ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
@@ -111,14 +113,15 @@ pub fn one_of<'a>(list: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, char> {
                 _ => e.details,
             },
         })
-    }
+    })
 }
 
-pub fn none_of<'a>(list: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, char> {
-    let set = list.chars().collect::<HashSet<char>>();
+pub fn none_of<'a>(list: &'a str) -> Parser<'a, char> {
+    let set = Rc::new(list.chars().collect::<HashSet<char>>());
 
-    move |input| {
-        satisfies(|c| !set.contains(&c))(input).map_err(|e| ParseError {
+    Rc::new(move |input| {
+        let set_clone = set.clone();
+        satisfies(move |c| !set_clone.contains(&c))(input).map_err(|e| ParseError {
             kind: ParserKind::NoneOf,
             details: match e.details {
                 ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
@@ -128,11 +131,11 @@ pub fn none_of<'a>(list: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, char> {
                 _ => e.details,
             },
         })
-    }
+    })
 }
 
-pub fn tag<'a>(tag: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, &'a str> {
-    move |input| {
+pub fn tag<'a>(tag: &'a str) -> Parser<'a, &'a str> {
+    Rc::new(move |input| {
         if input.len() < tag.len() {
             return Err(ParseError {
                 kind: ParserKind::Tag,
@@ -153,5 +156,5 @@ pub fn tag<'a>(tag: &'a str) -> impl Fn(&'a str) -> ParseResult<'a, &'a str> {
                 },
             })
         }
-    }
+    })
 }
