@@ -25,5 +25,5 @@ fn main() {
 
     let a = l.tokenize("1+2");
 
-    eprintln!("{:#?}", a);
+    println!("{:#?}", a);
 }

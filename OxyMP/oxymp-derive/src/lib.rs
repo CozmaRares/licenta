@@ -61,7 +61,7 @@ fn parse_grammar_attrs(
 }
 
 fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
-    let ast: syn::DeriveInput = syn::parse(input).unwrap();
+    let ast: syn::DeriveInput = syn::parse(input)?;
 
     let mut attr_groups = group_attrs(&ast.attrs);
 
@@ -69,7 +69,7 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         Some(v) => v,
         None => return Err(syn::Error::new(ast.span(), "Missing grammar rules.")),
     };
-    let grammar_rules = parse_grammar_attrs(grammar_attrs);
+    let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
 
     eprintln!("{:#?}", grammar_rules);
 
