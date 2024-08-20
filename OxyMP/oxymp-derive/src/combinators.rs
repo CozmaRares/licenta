@@ -88,7 +88,7 @@ pub fn alpha<'a>() -> Parser<'a, char> {
             e.details = match e.details {
                 ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
                     expected: "alphabetic".to_string(),
-                    found: truncate(input),
+                    found: input[..1].to_string(),
                 },
                 _ => e.details,
             };
@@ -104,7 +104,7 @@ pub fn digit<'a>(radix: u32) -> Parser<'a, char> {
             e.details = match e.details {
                 ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
                     expected: "digit".to_string(),
-                    found: truncate(input),
+                    found: input[..1].to_string(),
                 },
                 _ => e.details,
             };
@@ -123,7 +123,7 @@ pub fn one_of<'a>(list: &'a str) -> Parser<'a, char> {
             e.details = match e.details {
                 ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
                     expected: format!("one of: {}", set.iter().collect::<String>()),
-                    found: truncate(input),
+                    found: input[..1].to_string(),
                 },
                 _ => e.details,
             };
@@ -142,7 +142,7 @@ pub fn none_of<'a>(list: &'a str) -> Parser<'a, char> {
             e.details = match e.details {
                 ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
                     expected: format!("none of: {}", set.iter().collect::<String>()),
-                    found: truncate(input),
+                    found: input[..1].to_string(),
                 },
                 _ => e.details,
             };
@@ -364,7 +364,7 @@ mod tests {
                 error.details,
                 ParseErrorDetails::Unexpected {
                     expected: "alphabetic".to_string(),
-                    found: truncate(input)
+                    found: input[..1].to_string(),
                 }
             );
             assert_eq!(error.input, input);
