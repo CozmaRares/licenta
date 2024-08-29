@@ -24,7 +24,7 @@ pub enum ParserKind {
     OneOf,
     NoneOf,
     Tag,
-    Choice,
+    FirstOf,
     Sequence,
     Terminated,
     Preceeded,
@@ -179,9 +179,9 @@ pub fn tag<'a>(tag: &'a str) -> Parser<'a, &'a str> {
     })
 }
 
-pub fn choice<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Out> {
+pub fn first_of<'a, Out>(parsers: &'a [Parser<'a, Out>]) -> Parser<'a, Out> {
     Rc::new(move |input| {
-        for choice in choices {
+        for choice in parsers {
             let result = choice(input);
 
             if result.is_ok() {
@@ -190,7 +190,7 @@ pub fn choice<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Out> {
         }
 
         Err(ParseError {
-            trace: vec![ParserKind::Choice],
+            trace: vec![ParserKind::FirstOf],
             details: ParseErrorDetails::ChoicesFailed,
             input,
         })
