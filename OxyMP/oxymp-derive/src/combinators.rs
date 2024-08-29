@@ -30,6 +30,28 @@ pub enum ParserKind {
     External(&'static str),
 }
 
+macro_rules! extend_trace {
+    ($result:expr, $parser_kind:expr) => {
+        $result.map_err(|mut e| {
+            e.trace.push($parser_kind);
+            e
+        })
+    };
+}
+macro_rules! change_not_satisfied {
+    ($result:expr, $expected:expr, $input:expr) => {
+        $result.map_err(|mut e| {
+            if let ParseErrorDetails::NotSatisfied = e.details {
+                e.details = ParseErrorDetails::Unexpected {
+                    expected: $expected.to_string(),
+                    found: $input[..1].to_string(),
+                };
+            }
+            e
+        })
+    };
+}
+
 #[derive(Debug)]
 pub struct ParseError<'a> {
     pub trace: Vec<ParserKind>,
@@ -65,51 +87,35 @@ pub fn char<'a>() -> Parser<'a, char> {
 
 pub fn satisfies<'a>(predicate: impl Fn(char) -> bool + 'a) -> Parser<'a, char> {
     Rc::new(move |input| {
-        char()(input)
-            .map_err(|mut e| {
-                e.trace.push(ParserKind::Satisfies);
-                e
-            })
-            .map(|(remaining, ch)| match predicate(ch) {
+        extend_trace!(char()(input), ParserKind::Satisfies).map(
+            |(remaining, ch)| match predicate(ch) {
                 true => Ok((remaining, ch)),
                 false => Err(ParseError {
                     trace: vec![ParserKind::Satisfies],
                     details: ParseErrorDetails::NotSatisfied,
                     input,
                 }),
-            })?
+            },
+        )?
     })
 }
 
 pub fn alpha<'a>() -> Parser<'a, char> {
     Rc::new(|input| {
-        satisfies(|c| c.is_alphabetic())(input).map_err(|mut e| {
-            e.trace.push(ParserKind::Alpha);
-            e.details = match e.details {
-                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
-                    expected: "alphabetic".to_string(),
-                    found: input[..1].to_string(),
-                },
-                _ => e.details,
-            };
-            e
-        })
+        let p = satisfies(|c| c.is_alphabetic());
+
+        change_not_satisfied!(
+            extend_trace!(p(input), ParserKind::Alpha),
+            "alphabetic",
+            input
+        )
     })
 }
 
 pub fn digit<'a>(radix: u32) -> Parser<'a, char> {
     Rc::new(move |input| {
-        satisfies(move |c| c.is_digit(radix))(input).map_err(|mut e| {
-            e.trace.push(ParserKind::Digit);
-            e.details = match e.details {
-                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
-                    expected: "digit".to_string(),
-                    found: input[..1].to_string(),
-                },
-                _ => e.details,
-            };
-            e
-        })
+        let p = satisfies(move |c| c.is_digit(radix));
+        change_not_satisfied!(extend_trace!(p(input), ParserKind::Digit), "digit", input)
     })
 }
 
@@ -118,17 +124,13 @@ pub fn one_of<'a>(list: &'a str) -> Parser<'a, char> {
 
     Rc::new(move |input| {
         let set_clone = set.clone();
-        satisfies(move |c| set_clone.contains(&c))(input).map_err(|mut e| {
-            e.trace.push(ParserKind::OneOf);
-            e.details = match e.details {
-                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
-                    expected: format!("one of: {}", set.iter().collect::<String>()),
-                    found: input[..1].to_string(),
-                },
-                _ => e.details,
-            };
-            e
-        })
+        let p = satisfies(move |c| set_clone.contains(&c));
+
+        change_not_satisfied!(
+            extend_trace!(p(input), ParserKind::OneOf),
+            format!("one of: {}", set.iter().collect::<String>()),
+            input
+        )
     })
 }
 
@@ -137,17 +139,13 @@ pub fn none_of<'a>(list: &'a str) -> Parser<'a, char> {
 
     Rc::new(move |input| {
         let set_clone = set.clone();
-        satisfies(move |c| !set_clone.contains(&c))(input).map_err(|mut e| {
-            e.trace.push(ParserKind::OneOf);
-            e.details = match e.details {
-                ParseErrorDetails::NotSatisfied => ParseErrorDetails::Unexpected {
-                    expected: format!("none of: {}", set.iter().collect::<String>()),
-                    found: input[..1].to_string(),
-                },
-                _ => e.details,
-            };
-            e
-        })
+        let p = satisfies(move |c| !set_clone.contains(&c));
+
+        change_not_satisfied!(
+            extend_trace!(p(input), ParserKind::NoneOf),
+            format!("none of: {}", set.iter().collect::<String>()),
+            input
+        )
     })
 }
 
@@ -202,10 +200,7 @@ pub fn sequence<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Vec<Out>>
         let mut input = input;
 
         for choice in choices {
-            let result = choice(input).map_err(|mut e| {
-                e.trace.push(ParserKind::Sequence);
-                e
-            })?;
+            let result = extend_trace!(choice(input), ParserKind::Sequence)?;
             input = result.0;
             ret.push(result.1);
         }
