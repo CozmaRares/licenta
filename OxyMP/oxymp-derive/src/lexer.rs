@@ -6,21 +6,21 @@ use crate::attribute::AttributeList;
 
 #[derive(Debug)]
 pub struct ExactToken {
-    name: String,
-    pattern: String,
+    pub name: String,
+    pub pattern: String,
 }
 
 #[derive(Debug)]
 pub struct RegexToken {
-    name: String,
-    regex: String,
-    transformer_fn: String,
-    kind: String,
+    pub name: String,
+    pub regex: String,
+    pub transformer_fn: String,
+    pub kind: String,
 }
 
 #[derive(Debug)]
 pub struct IgnorePattern {
-    regex: String,
+    pub regex: String,
 }
 
 #[derive(Debug)]

@@ -52,10 +52,11 @@ fn parse_grammar_attrs(
 ) -> syn::Result<Vec<GrammarRule>> {
     let mut rules = Vec::new();
 
-    for attr in grammar_attrs {
-        let AttributeNameValue(NameValue { value, .. }) = syn::parse2(attr)?;
-        rules.push(GrammarRule::new(&value));
-    }
+    // FIX:
+    //for attr in grammar_attrs {
+    //    let AttributeNameValue(NameValue { value, .. }) = syn::parse2(attr)?;
+    //    rules.push(GrammarRule::new(&value));
+    //}
 
     return Ok(rules);
 }

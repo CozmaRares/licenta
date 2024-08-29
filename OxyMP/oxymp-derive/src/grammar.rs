@@ -1,12 +1,10 @@
-use std::collections::HashSet;
-
-use crate::lexer::TokenInfo;
 use crate::combinators::*;
+use crate::lexer::{ExactToken, RegexToken, TokenInfo};
 
 #[derive(Debug)]
-enum GrammarTerminal{
+enum GrammarTerminal {
     Pattern(String),
-    Token(String)
+    Token(String),
 }
 #[derive(Debug)]
 struct GrammarNonTerminal(String);
@@ -33,7 +31,7 @@ pub struct GrammarRule {
 }
 
 impl GrammarRule {
-    pub fn new(rule: &str) -> Self {
+    fn new(rule: &str) -> Self {
         return GrammarRule {
             name: "name".to_string(),
             rule: GrammarNode::Terminal(GrammarTerminal::Token("rule".to_string())),
@@ -41,5 +39,31 @@ impl GrammarRule {
     }
 }
 
-// expr -> Number (('+' | '-') expr)?
+pub struct Grammar<'a> {
+    token_info: &'a [TokenInfo],
+}
 
+impl<'a> Grammar<'a> {
+    pub fn new(token_info: &'a [TokenInfo]) -> Self {
+        Grammar { token_info }
+    }
+
+    fn generate_token_parser(token_info: &'a [TokenInfo]) -> Parser<'a, &'a str> {
+        let mut parsers = Vec::new();
+
+        for info in token_info {
+            match info {
+                TokenInfo::Exact(ExactToken { name, pattern }) => {
+                    parsers.push(tag(name.to_string()));
+                    parsers.push(tag(format!("'{}'", pattern)));
+                }
+                TokenInfo::Regex(RegexToken { name, .. }) => parsers.push(tag(name.to_string())),
+                TokenInfo::Ignore(_) => {}
+            };
+        }
+
+        first_of(parsers.into())
+    }
+
+    // expr -> Number (('+' | '-') expr)?
+}

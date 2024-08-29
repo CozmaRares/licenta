@@ -152,7 +152,7 @@ pub fn none_of<'a>(list: &'a str) -> Parser<'a, char> {
     })
 }
 
-pub fn tag<'a>(tag: &'a str) -> Parser<'a, &'a str> {
+pub fn tag<'a>(tag: String) -> Parser<'a, &'a str> {
     Rc::new(move |input| {
         if input.len() < tag.len() {
             return Err(ParseError {
@@ -164,7 +164,7 @@ pub fn tag<'a>(tag: &'a str) -> Parser<'a, &'a str> {
 
         let (to_match, rest) = input.split_at(tag.len());
 
-        if *to_match == *tag {
+        if to_match == tag {
             Ok((rest, to_match))
         } else {
             Err(ParseError {
@@ -179,9 +179,12 @@ pub fn tag<'a>(tag: &'a str) -> Parser<'a, &'a str> {
     })
 }
 
-pub fn first_of<'a, Out>(parsers: &'a [Parser<'a, Out>]) -> Parser<'a, Out> {
+pub fn first_of<'a, Out>(parsers: Rc<[Parser<'a, Out>]>) -> Parser<'a, Out>
+where
+    Out: 'a,
+{
     Rc::new(move |input| {
-        for choice in parsers {
+        for choice in &*parsers {
             let result = choice(input);
 
             if result.is_ok() {
@@ -197,12 +200,15 @@ pub fn first_of<'a, Out>(parsers: &'a [Parser<'a, Out>]) -> Parser<'a, Out> {
     })
 }
 
-pub fn sequence<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Vec<Out>> {
+pub fn sequence<'a, Out>(choices: Rc<[Parser<'a, Out>]>) -> Parser<'a, Vec<Out>>
+where
+    Out: 'a,
+{
     Rc::new(move |input| {
         let mut ret = Vec::new();
         let mut input = input;
 
-        for choice in choices {
+        for choice in &*choices {
             let result = extend_trace!(choice(input), ParserKind::Sequence)?;
             input = result.0;
             ret.push(result.1);
