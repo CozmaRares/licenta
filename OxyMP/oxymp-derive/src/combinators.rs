@@ -26,6 +26,9 @@ pub enum ParserKind {
     Tag,
     Choice,
     Sequence,
+    Terminated,
+    Preceeded,
+    Delimited,
 
     External(&'static str),
 }
@@ -205,8 +208,52 @@ pub fn sequence<'a, Out>(choices: &'a [Parser<'a, Out>]) -> Parser<'a, Vec<Out>>
             ret.push(result.1);
         }
 
-        return Ok((input, ret));
+        Ok((input, ret))
     })
+}
+
+pub fn terminated<'a, Out1, Out2>(
+    first: Parser<'a, Out1>,
+    second: Parser<'a, Out2>,
+) -> Parser<'a, Out1>
+where
+    Out1: 'a,
+    Out2: 'a,
+{
+    Rc::new(move |input| {
+        let ret = extend_trace!(first(input), ParserKind::Terminated)?;
+        extend_trace!(second(input), ParserKind::Terminated)?;
+
+        Ok(ret)
+    })
+}
+
+pub fn preceeded<'a, Out1, Out2>(
+    first: Parser<'a, Out1>,
+    second: Parser<'a, Out2>,
+) -> Parser<'a, Out2>
+where
+    Out1: 'a,
+    Out2: 'a,
+{
+    Rc::new(move |input| {
+        extend_trace!(first(input), ParserKind::Preceeded)?;
+        let ret = extend_trace!(second(input), ParserKind::Preceeded)?;
+        Ok(ret)
+    })
+}
+
+pub fn delimited<'a, Out1, Out2, Out3>(
+    left: Parser<'a, Out1>,
+    middle: Parser<'a, Out2>,
+    right: Parser<'a, Out3>,
+) -> Parser<'a, Out2>
+where
+    Out1: 'a,
+    Out2: 'a,
+    Out3: 'a,
+{
+    preceeded(left, terminated(middle, right))
 }
 
 #[cfg(test)]
