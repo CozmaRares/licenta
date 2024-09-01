@@ -20,6 +20,7 @@ pub enum ParserKind {
     Char,
     Satisfies,
     Alpha,
+    ExactChar,
     Digit,
     OneOf,
     NoneOf,
@@ -29,6 +30,8 @@ pub enum ParserKind {
     Terminated,
     Preceeded,
     Delimited,
+    Many1,
+    Then,
 
     External(&'static str),
 }
@@ -43,7 +46,7 @@ macro_rules! extend_trace {
 }
 macro_rules! change_not_satisfied {
     ($result:expr, $expected:expr, $input:expr) => {
-        $result.map_err(|mut e| {
+        $result.map_err(move |mut e| {
             if let ParseErrorDetails::NotSatisfied = e.details {
                 e.details = ParseErrorDetails::Unexpected {
                     expected: $expected.to_string(),
@@ -60,16 +63,6 @@ pub struct ParseError<'a> {
     pub trace: Vec<ParserKind>,
     pub details: ParseErrorDetails,
     pub input: &'a str,
-}
-
-fn truncate(s: &str) -> String {
-    let max_length = 10;
-
-    if s.len() > max_length {
-        format!("{}...", &s[..max_length])
-    } else {
-        s.into()
-    }
 }
 
 pub fn char<'a>() -> Parser<'a, char> {
@@ -103,6 +96,19 @@ pub fn satisfies<'a>(predicate: impl Fn(char) -> bool + 'a) -> Parser<'a, char> 
     })
 }
 
+pub fn exact_char<'a>(chr: char) -> Parser<'a, char> {
+    Rc::new(move |input| {
+        let chr_clone = chr.clone();
+        let p = satisfies(move |c| c == chr_clone);
+
+        change_not_satisfied!(
+            extend_trace!(p(input), ParserKind::ExactChar),
+            chr.clone().to_string(),
+            input
+        )
+    })
+}
+
 pub fn alpha<'a>() -> Parser<'a, char> {
     Rc::new(|input| {
         let p = satisfies(|c| c.is_alphabetic());
@@ -126,12 +132,13 @@ pub fn one_of<'a>(list: &'a str) -> Parser<'a, char> {
     let set = Rc::new(list.chars().collect::<HashSet<char>>());
 
     Rc::new(move |input| {
-        let set_clone = set.clone();
-        let p = satisfies(move |c| set_clone.contains(&c));
+        let set_clone1 = set.clone();
+        let set_clone2 = set.clone();
+        let p = satisfies(move |c| set_clone1.contains(&c));
 
         change_not_satisfied!(
             extend_trace!(p(input), ParserKind::OneOf),
-            format!("one of: {}", set.iter().collect::<String>()),
+            format!("one of: {}", set_clone2.iter().collect::<String>()),
             input
         )
     })
@@ -141,12 +148,13 @@ pub fn none_of<'a>(list: &'a str) -> Parser<'a, char> {
     let set = Rc::new(list.chars().collect::<HashSet<char>>());
 
     Rc::new(move |input| {
-        let set_clone = set.clone();
-        let p = satisfies(move |c| !set_clone.contains(&c));
+        let set_clone1 = set.clone();
+        let set_clone2 = set.clone();
+        let p = satisfies(move |c| !set_clone1.contains(&c));
 
         change_not_satisfied!(
             extend_trace!(p(input), ParserKind::NoneOf),
-            format!("none of: {}", set.iter().collect::<String>()),
+            format!("none of: {}", set_clone2.iter().collect::<String>()),
             input
         )
     })
@@ -179,10 +187,7 @@ pub fn tag<'a>(tag: String) -> Parser<'a, &'a str> {
     })
 }
 
-pub fn first_of<'a, Out>(parsers: Rc<[Parser<'a, Out>]>) -> Parser<'a, Out>
-where
-    Out: 'a,
-{
+pub fn first_of<'a, Out: 'a>(parsers: Rc<[Parser<'a, Out>]>) -> Parser<'a, Out> {
     Rc::new(move |input| {
         for choice in &*parsers {
             let result = choice(input);
@@ -200,32 +205,25 @@ where
     })
 }
 
-pub fn sequence<'a, Out>(choices: Rc<[Parser<'a, Out>]>) -> Parser<'a, Vec<Out>>
-where
-    Out: 'a,
-{
+pub fn sequence<'a, Out: 'a>(choices: Rc<[Parser<'a, Out>]>) -> Parser<'a, Vec<Out>> {
     Rc::new(move |input| {
         let mut ret = Vec::new();
         let mut input = input;
 
         for choice in &*choices {
-            let result = extend_trace!(choice(input), ParserKind::Sequence)?;
-            input = result.0;
-            ret.push(result.1);
+            let (remainig, res) = extend_trace!(choice(input), ParserKind::Sequence)?;
+            input = remainig;
+            ret.push(res);
         }
 
         Ok((input, ret))
     })
 }
 
-pub fn terminated<'a, Out1, Out2>(
+pub fn terminated<'a, Out1: 'a, Out2: 'a>(
     first: Parser<'a, Out1>,
     second: Parser<'a, Out2>,
-) -> Parser<'a, Out1>
-where
-    Out1: 'a,
-    Out2: 'a,
-{
+) -> Parser<'a, Out1> {
     Rc::new(move |input| {
         let ret = extend_trace!(first(input), ParserKind::Terminated)?;
         extend_trace!(second(input), ParserKind::Terminated)?;
@@ -234,14 +232,10 @@ where
     })
 }
 
-pub fn preceeded<'a, Out1, Out2>(
+pub fn preceeded<'a, Out1: 'a, Out2: 'a>(
     first: Parser<'a, Out1>,
     second: Parser<'a, Out2>,
-) -> Parser<'a, Out2>
-where
-    Out1: 'a,
-    Out2: 'a,
-{
+) -> Parser<'a, Out2> {
     Rc::new(move |input| {
         extend_trace!(first(input), ParserKind::Preceeded)?;
         let ret = extend_trace!(second(input), ParserKind::Preceeded)?;
@@ -249,17 +243,86 @@ where
     })
 }
 
-pub fn delimited<'a, Out1, Out2, Out3>(
+pub fn delimited<'a, Out1: 'a, Out2: 'a, Out3: 'a>(
     left: Parser<'a, Out1>,
     middle: Parser<'a, Out2>,
     right: Parser<'a, Out3>,
-) -> Parser<'a, Out2>
-where
-    Out1: 'a,
-    Out2: 'a,
-    Out3: 'a,
-{
+) -> Parser<'a, Out2> {
     preceeded(left, terminated(middle, right))
+}
+
+pub fn many0<'a, Out: 'a>(parser: Parser<'a, Out>) -> Parser<'a, Vec<Out>> {
+    Rc::new(move |input| {
+        let mut ret = Vec::new();
+        let mut input = input;
+
+        loop {
+            let res = parser(input);
+
+            match res {
+                Ok((remaining, res)) => {
+                    ret.push(res);
+                    input = remaining
+                }
+                _ => break,
+            }
+        }
+
+        Ok((input, ret))
+    })
+}
+
+pub fn many1<'a, Out: 'a>(parser: Parser<'a, Out>) -> Parser<'a, Vec<Out>> {
+    Rc::new(move |input| {
+        let mut ret = Vec::new();
+        let mut input = input;
+
+        loop {
+            let res = parser(input);
+
+            match res {
+                Ok((remaining, res)) => {
+                    ret.push(res);
+                    input = remaining
+                }
+                Err(mut e) => {
+                    if ret.len() > 0 {
+                        break;
+                    }
+
+                    e.trace.push(ParserKind::Many1);
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok((input, ret))
+    })
+}
+
+pub fn optional<'a, Out: 'a>(parser: Parser<'a, Out>) -> Parser<'a, Option<Out>> {
+    Rc::new(move |input| match parser(input) {
+        Ok((remaining, res)) => Ok((remaining, Some(res))),
+        Err(_) => Ok((input, None)),
+    })
+}
+
+pub fn then<'a, Out1: 'a, Out2: 'a>(
+    first: Parser<'a, Out1>,
+    second: Parser<'a, Out2>,
+) -> Parser<'a, (Out1, Out2)> {
+    Rc::new(move |input| {
+        let (input, r1) = extend_trace!(first(input), ParserKind::Then)?;
+        let (input, r2) = extend_trace!(second(input), ParserKind::Then)?;
+        Ok((input, (r1, r2)))
+    })
+}
+
+pub fn separated<'a, Out1: 'a, Out2: 'a>(
+    parser: Parser<'a, Out1>,
+    delimiter: Parser<'a, Out2>,
+) -> Parser<'a, (Out1, Vec<(Out2, Out1)>)> {
+    then(parser.clone(), many0(then(delimiter, parser)))
 }
 
 #[cfg(test)]
