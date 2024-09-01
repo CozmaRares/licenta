@@ -40,12 +40,14 @@ impl GrammarRule {
 }
 
 pub struct Grammar<'a> {
-    token_info: &'a [TokenInfo],
+    tokens_parser: Parser<'a, &'a str>,
 }
 
 impl<'a> Grammar<'a> {
     pub fn new(token_info: &'a [TokenInfo]) -> Self {
-        Grammar { token_info }
+        Grammar {
+            tokens_parser: Grammar::generate_token_parser(token_info),
+        }
     }
 
     fn generate_token_parser(token_info: &'a [TokenInfo]) -> Parser<'a, &'a str> {
@@ -66,4 +68,12 @@ impl<'a> Grammar<'a> {
     }
 
     // expr -> Number (('+' | '-') expr)?
+
+    fn choice(&self) -> Parser<'a, (&'a str, Vec<(char, &'a str)>)> {
+        delimited(
+            exact_char('('),
+            separated(self.tokens_parser.clone(), exact_char('|')),
+            exact_char(')'),
+        )
+    }
 }
