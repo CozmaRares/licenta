@@ -1,0 +1,22 @@
+<GRAMAMR RULE> ::= <EXPR_NAME> -> <EXPR>
+
+<EXPR> ::= <GROUP>
+         | <LITERAL> <EXPR>
+         | <LITERAL>
+
+<LITERAL> ::= <EXPR_NAME> | <TERMINAL>
+
+<EXPR_NAME> ::= __string__
+
+<TERMINAL> ::= __token__
+             | '__token_pattern__'
+
+<GROUP> ::= <CHOICE>
+          | <OPTIONAL>
+
+<CHOICE> ::= ( CHOICE_INNER )
+
+<CHOICE_INNER> ::= <EXPR>
+                 | <EXPR> '|' <CHOICE_INNER>
+
+<OPTIONAL> ::= ( <EXPR> ) ?
