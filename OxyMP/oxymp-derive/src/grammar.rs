@@ -1,27 +1,20 @@
-use crate::combinators::*;
-use crate::lexer::{ExactToken, RegexToken, TokenInfo};
-
-#[derive(Debug)]
-enum GrammarTerminal {
-    Pattern(String),
-    Token(String),
-}
-#[derive(Debug)]
-struct GrammarNonTerminal(String);
-#[derive(Debug)]
-struct GrammarGroup(Box<GrammarNode>);
-#[derive(Debug)]
-struct GrammarChoice(Vec<GrammarNode>);
-#[derive(Debug)]
-struct GrammarOptional(Box<GrammarNode>);
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take_till1},
+    character::complete::{alpha1, char},
+    combinator::eof,
+    multi::{many1, separated_list1},
+    sequence::{delimited, tuple},
+    IResult,
+};
 
 #[derive(Debug)]
 pub enum GrammarNode {
-    Terminal(GrammarTerminal),
-    NonTerminal(GrammarNonTerminal),
-    Group(GrammarGroup),
-    Choice(GrammarChoice),
-    Optional(GrammarOptional),
+    Name(String),
+    Token(String),
+    Expr(Vec<GrammarNode>),
+    Choice(Vec<GrammarNode>),
+    Optional(Box<GrammarNode>),
 }
 
 #[derive(Debug)]
@@ -31,49 +24,59 @@ pub struct GrammarRule {
 }
 
 impl GrammarRule {
-    fn new(rule: &str) -> Self {
-        return GrammarRule {
-            name: "name".to_string(),
-            rule: GrammarNode::Terminal(GrammarTerminal::Token("rule".to_string())),
-        };
+    pub fn new(rule: &str) -> Self {
+        grammar_rule(rule).unwrap().1
     }
 }
 
-pub struct Grammar<'a> {
-    tokens_parser: Parser<'a, &'a str>,
+// TODO: support spaces
+fn grammar_rule(input: &str) -> IResult<&str, GrammarRule> {
+    let (input, name) = name(input)?;
+    let (input, _) = tag("->")(input)?;
+    let (input, rule) = expr(input)?;
+    let (input, _) = eof(input)?;
+
+    let inner;
+
+    match name {
+        GrammarNode::Name(name) => inner = name,
+        _ => unreachable!(),
+    }
+
+    Ok((input, GrammarRule { name: inner, rule }))
 }
 
-impl<'a> Grammar<'a> {
-    pub fn new(token_info: &'a [TokenInfo]) -> Self {
-        Grammar {
-            tokens_parser: Grammar::generate_token_parser(token_info),
-        }
-    }
+fn name(input: &str) -> IResult<&str, GrammarNode> {
+    let (remaining, matched) = alpha1(input)?;
+    Ok((remaining, GrammarNode::Name(matched.into())))
+}
 
-    fn generate_token_parser(token_info: &'a [TokenInfo]) -> Parser<'a, &'a str> {
-        let mut parsers = Vec::new();
+fn expr(input: &str) -> IResult<&str, GrammarNode> {
+    let (remaining, exprs) = many1(expr1)(input)?;
+    Ok((remaining, GrammarNode::Expr(exprs)))
+}
 
-        for info in token_info {
-            match info {
-                TokenInfo::Exact(ExactToken { name, pattern }) => {
-                    parsers.push(tag(name.to_string()));
-                    parsers.push(tag(format!("'{}'", pattern)));
-                }
-                TokenInfo::Regex(RegexToken { name, .. }) => parsers.push(tag(name.to_string())),
-                TokenInfo::Ignore(_) => {}
-            };
-        }
+fn expr1(input: &str) -> IResult<&str, GrammarNode> {
+    alt((optional, choice, literal))(input)
+}
 
-        first_of(parsers.into())
-    }
+fn literal(input: &str) -> IResult<&str, GrammarNode> {
+    alt((token, name))(input)
+}
 
-    // expr -> Number (('+' | '-') expr)?
+// TODO: support \'
+fn token(input: &str) -> IResult<&str, GrammarNode> {
+    let (remaining, matched) = delimited(char('\''), take_till1(|c| c == '\''), char('\''))(input)?;
+    Ok((remaining, GrammarNode::Token(matched.into())))
+}
 
-    fn choice(&self) -> Parser<'a, (&'a str, Vec<(char, &'a str)>)> {
-        delimited(
-            exact_char('('),
-            separated(self.tokens_parser.clone(), exact_char('|')),
-            exact_char(')'),
-        )
-    }
+fn optional(input: &str) -> IResult<&str, GrammarNode> {
+    let (remaining, (opt, _)) = tuple((delimited(char('('), expr, char(')')), char('?')))(input)?;
+    Ok((remaining, GrammarNode::Optional(Box::new(opt))))
+}
+
+fn choice(input: &str) -> IResult<&str, GrammarNode> {
+    let (remaining, choices) =
+        delimited(char('('), separated_list1(char('|'), expr), char(')'))(input)?;
+    Ok((remaining, GrammarNode::Choice(choices)))
 }

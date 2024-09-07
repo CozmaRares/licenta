@@ -1,15 +1,14 @@
 mod attribute;
-mod combinators;
 mod grammar;
 mod lexer;
 
 use std::collections::HashMap;
 
 use attribute::{AttributeNameValue, NameValue};
+use grammar::GrammarRule;
 use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 
-use crate::grammar::{GrammarNode, GrammarRule};
 use crate::lexer::{Lexer, TokenInfo};
 
 fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::TokenStream>> {
@@ -52,11 +51,10 @@ fn parse_grammar_attrs(
 ) -> syn::Result<Vec<GrammarRule>> {
     let mut rules = Vec::new();
 
-    // FIX:
-    //for attr in grammar_attrs {
-    //    let AttributeNameValue(NameValue { value, .. }) = syn::parse2(attr)?;
-    //    rules.push(GrammarRule::new(&value));
-    //}
+    for attr in grammar_attrs {
+        let AttributeNameValue(NameValue { value, .. }) = syn::parse2(attr)?;
+        rules.push(GrammarRule::new(&value));
+    }
 
     return Ok(rules);
 }
