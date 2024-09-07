@@ -5,7 +5,7 @@ mod lexer;
 use std::collections::HashMap;
 
 use attribute::{AttributeNameValue, NameValue};
-use grammar::GrammarRule;
+use grammar::{aggragate_rules, RawGrammarRule};
 use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 
@@ -48,12 +48,15 @@ fn parse_token_attrs(
 
 fn parse_grammar_attrs(
     grammar_attrs: Vec<proc_macro2::TokenStream>,
-) -> syn::Result<Vec<GrammarRule>> {
+) -> syn::Result<Vec<RawGrammarRule>> {
     let mut rules = Vec::new();
 
     for attr in grammar_attrs {
-        let AttributeNameValue(NameValue { value, .. }) = syn::parse2(attr)?;
-        rules.push(GrammarRule::new(&value));
+        let AttributeNameValue(NameValue { name, value }) = syn::parse2(attr)?;
+        match grammar::new_rule(&value) {
+            Ok(rule) => rules.push(rule),
+            Err(err) => return Err(syn::Error::new(name.span, err.to_string())),
+        }
     }
 
     return Ok(rules);
@@ -68,11 +71,10 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         Some(v) => v,
         None => return Err(syn::Error::new(ast.span(), "Missing grammar rules.")),
     };
-    let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
-
-    eprintln!("{:#?}", grammar_rules);
-
     let token_info = parse_token_attrs(attr_groups)?;
+    let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
+    let grammar_rules = aggragate_rules(grammar_rules, &token_info);
+    eprintln!("{:#?}", grammar_rules);
 
     let lexer = Lexer::generate(&token_info);
 
