@@ -4,10 +4,10 @@ use std::collections::{HashMap, HashSet};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till1},
-    character::complete::{alpha1, char},
+    character::complete::{alpha1, char, multispace0},
     combinator::eof,
     multi::{many1, separated_list1},
-    sequence::{delimited, tuple},
+    sequence::delimited,
     IResult,
 };
 
@@ -137,7 +137,24 @@ pub fn aggragate_rules(
         })
 }
 
-// TODO: support whitespace
+fn ws<'a, O, E: nom::error::ParseError<&'a str>, F>(
+    inner: F,
+) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+where
+    F: nom::Parser<&'a str, O, E>,
+{
+    delimited(multispace0, inner, multispace0)
+}
+
+fn paranthesized<'a, O, E: nom::error::ParseError<&'a str>, F>(
+    inner: F,
+) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+where
+    F: nom::Parser<&'a str, O, E>,
+{
+    delimited(ws(char('(')), inner, ws(char(')')))
+}
+
 fn grammar_rule(input: &str) -> IResult<&str, RawGrammarRule> {
     let (input, name) = name(input)?;
     let (input, _) = tag("->")(input)?;
@@ -155,36 +172,38 @@ fn grammar_rule(input: &str) -> IResult<&str, RawGrammarRule> {
 }
 
 fn name(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (remaining, matched) = alpha1(input)?;
-    Ok((remaining, RawGrammarNode::Name(matched.into())))
+    let (input, matched) = ws(alpha1)(input)?;
+    Ok((input, RawGrammarNode::Name(matched.into())))
 }
 
 fn expr(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (remaining, exprs) = many1(expr1)(input)?;
-    Ok((remaining, RawGrammarNode::Expr(exprs)))
+    let (input, exprs) = many1(expr1)(input)?;
+    Ok((input, RawGrammarNode::Expr(exprs)))
 }
 
 fn expr1(input: &str) -> IResult<&str, RawGrammarNode> {
-    alt((optional, choice, literal))(input)
+    let (input, expr) = alt((optional, choice, literal))(input)?;
+    Ok((input, expr))
 }
 
 fn literal(input: &str) -> IResult<&str, RawGrammarNode> {
-    alt((token, name))(input)
+    let (input, literal) = alt((token, name))(input)?;
+    Ok((input, literal))
 }
 
 // TODO: support \'
 fn token(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (remaining, matched) = delimited(char('\''), take_till1(|c| c == '\''), char('\''))(input)?;
-    Ok((remaining, RawGrammarNode::Pattern(matched.into())))
+    let (input, matched) = ws(delimited(char('\''), take_till1(|c| c == '\''), char('\'')))(input)?;
+    Ok((input, RawGrammarNode::Pattern(matched.into())))
 }
 
 fn optional(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (remaining, (opt, _)) = tuple((delimited(char('('), expr, char(')')), char('?')))(input)?;
-    Ok((remaining, RawGrammarNode::Optional(Box::new(opt))))
+    let (input, opt) = paranthesized(expr)(input)?;
+    let (input, _) = ws(char('?'))(input)?;
+    Ok((input, RawGrammarNode::Optional(Box::new(opt))))
 }
 
 fn choice(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (remaining, choices) =
-        delimited(char('('), separated_list1(char('|'), expr), char(')'))(input)?;
-    Ok((remaining, RawGrammarNode::Choice(choices)))
+    let (input, choices) = paranthesized(separated_list1(char('|'), expr))(input)?;
+    Ok((input, RawGrammarNode::Choice(choices)))
 }
