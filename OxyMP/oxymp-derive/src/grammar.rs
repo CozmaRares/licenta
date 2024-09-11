@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_till1},
-    character::complete::{alpha1, char, multispace0},
-    combinator::eof,
+    bytes::complete::{escaped, escaped_transform, tag, take_till1},
+    character::complete::{alpha1, char, multispace0, one_of},
+    combinator::{eof, value},
     multi::{many1, separated_list1},
     sequence::delimited,
     IResult,
@@ -191,9 +191,16 @@ fn literal(input: &str) -> IResult<&str, RawGrammarNode> {
     Ok((input, literal))
 }
 
-// TODO: support \'
+fn pattern(input: &str) -> IResult<&str, String> {
+    escaped_transform(
+        take_till1(|c| c == '\'' || c == '\\'),
+        '\\',
+        alt((value("\\", tag("\\")), value("'", tag("'")))),
+    )(input)
+}
+
 fn token(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, matched) = ws(delimited(char('\''), take_till1(|c| c == '\''), char('\'')))(input)?;
+    let (input, matched) = ws(delimited(char('\''), pattern, char('\'')))(input)?;
     Ok((input, RawGrammarNode::Pattern(matched.into())))
 }
 
