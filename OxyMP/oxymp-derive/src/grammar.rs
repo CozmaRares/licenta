@@ -53,7 +53,7 @@ impl GrammarNode {
             },
             RawGrammarNode::Pattern(pattern) => match patterns.contains(&pattern) {
                 false => panic!(
-                    "Error when parsing grammar rules\nUnknown token pattern: '{}'",
+                    "Error when parsing grammar rules\nUnknown token pattern: {}",
                     pattern
                 ),
                 true => GrammarNode::Pattern(pattern),
@@ -112,7 +112,7 @@ pub fn aggragate_grammar_rules(
     let mut add_token_pattern = |tok_pattern| {
         if patterns.contains(&tok_pattern) {
             panic!(
-                "Error when parsing grammar rules\nTwo tokens share the same pattern: '{}'",
+                "Error when parsing grammar rules\nTwo tokens share the same pattern: {}",
                 tok_pattern
             )
         }
@@ -195,13 +195,13 @@ fn pattern(input: &str) -> IResult<&str, String> {
     escaped_transform(
         take_till1(|c| c == '\'' || c == '\\'),
         '\\',
-        alt((value("\\", tag("\\")), value("'", tag("'")))),
+        alt((value(r"\", tag(r"\")), value("'", tag("'")))),
     )(input)
 }
 
 fn token(input: &str) -> IResult<&str, RawGrammarNode> {
     let (input, matched) = ws(delimited(char('\''), pattern, char('\'')))(input)?;
-    Ok((input, RawGrammarNode::Pattern(matched.into())))
+    Ok((input, RawGrammarNode::Pattern(matched)))
 }
 
 fn optional(input: &str) -> IResult<&str, RawGrammarNode> {

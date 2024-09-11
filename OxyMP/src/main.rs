@@ -7,10 +7,10 @@ fn match_number(matched: &str) -> i64 {
 #[derive(RecursiveDescent)]
 #[exact_token(name = "ParanLeft", pattern = "(")]
 #[exact_token(name = "ParanRight", pattern = ")")]
-#[exact_token(name = "NewLine", pattern = "\n")]
 #[exact_token(name = "Plus", pattern = "+")]
 #[exact_token(name = "Minus", pattern = "-")]
 #[exact_token(name = "Apos", pattern = "'")]
+#[exact_token(name = "BkSl", pattern = r"\")]
 #[regex_token(
     name = "Number",
     regex = r"-?[0-9]+",
@@ -18,7 +18,7 @@ fn match_number(matched: &str) -> i64 {
     kind = "i64"
 )]
 #[ignore_pattern(regex = r"\s+")]
-#[grammar = r" expr -> Number ( ( '+' | '-' ) '\'' expr ) ? "]
+#[grammar = r" expr -> Number ( ( '+' | '-' ) '\'' '\\' expr ) ? "]
 struct Parser;
 
 fn main() {
