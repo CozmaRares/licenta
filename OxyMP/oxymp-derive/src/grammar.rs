@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, escaped_transform, tag, take_till1},
-    character::complete::{alpha1, char, multispace0, one_of},
+    bytes::complete::{escaped_transform, tag, take_till1},
+    character::complete::{alpha1, char, multispace0},
     combinator::{eof, value},
     multi::{many1, separated_list1},
     sequence::delimited,
@@ -83,11 +83,11 @@ pub struct RawGrammarRule {
     rule: RawGrammarNode,
 }
 
-pub fn new_rule(rule: &str) -> Result<RawGrammarRule, nom::Err<nom::error::Error<&str>>> {
+pub fn new_grammar_rule(rule: &str) -> Result<RawGrammarRule, nom::Err<nom::error::Error<&str>>> {
     grammar_rule(rule).map(|(_, rule)| rule)
 }
 
-pub fn aggragate_rules(
+pub fn aggragate_grammar_rules(
     rules: Vec<RawGrammarRule>,
     token_info: &Vec<TokenInfo>,
 ) -> HashMap<String, GrammarNode> {
