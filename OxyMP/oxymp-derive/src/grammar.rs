@@ -1,10 +1,10 @@
 use core::panic;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use nom::{
     branch::alt,
-    bytes::complete::{escaped_transform, tag, take_till1},
-    character::complete::{alpha1, char, multispace0},
+    bytes::complete::{escaped_transform, tag},
+    character::complete::{alpha1, char, multispace0, none_of},
     combinator::{eof, value},
     multi::{many1, separated_list1},
     sequence::delimited,
@@ -26,7 +26,6 @@ enum RawGrammarNode {
 pub enum GrammarNode {
     Rule(String),
     Token(String),
-    Pattern(String),
     Expr(Vec<GrammarNode>),
     Choice(Vec<GrammarNode>),
     Optional(Box<GrammarNode>),
@@ -41,7 +40,7 @@ impl GrammarNode {
     fn from_raw(
         node: RawGrammarNode,
         names: &HashMap<String, NameType>,
-        patterns: &HashSet<String>,
+        patterns: &HashMap<String, String>,
     ) -> Self {
         match node {
             RawGrammarNode::Name(name) => match names.get(&name) {
@@ -51,12 +50,12 @@ impl GrammarNode {
                     NameType::Token => GrammarNode::Token(name),
                 },
             },
-            RawGrammarNode::Pattern(pattern) => match patterns.contains(&pattern) {
-                false => panic!(
+            RawGrammarNode::Pattern(pattern) => match patterns.get(&pattern) {
+                None => panic!(
                     "Error when parsing grammar rules\nUnknown token pattern: {}",
                     pattern
                 ),
-                true => GrammarNode::Pattern(pattern),
+                Some(tok) => GrammarNode::Token(tok.to_string()),
             },
             RawGrammarNode::Expr(exprs) => GrammarNode::Expr(
                 exprs
@@ -92,7 +91,7 @@ pub fn aggragate_grammar_rules(
     token_info: &Vec<TokenInfo>,
 ) -> HashMap<String, GrammarNode> {
     let mut names = HashMap::new();
-    let mut patterns = HashSet::new();
+    let mut patterns = HashMap::new();
 
     rules.iter().for_each(|rule| {
         names.insert(rule.name.clone(), NameType::Rule);
@@ -109,21 +108,21 @@ pub fn aggragate_grammar_rules(
         names.insert(tok_name, NameType::Token);
     };
 
-    let mut add_token_pattern = |tok_pattern| {
-        if patterns.contains(&tok_pattern) {
+    let mut add_token_pattern = |tok_pattern, tok_name| {
+        if patterns.contains_key(&tok_pattern) {
             panic!(
                 "Error when parsing grammar rules\nTwo tokens share the same pattern: {}",
                 tok_pattern
             )
         }
 
-        patterns.insert(tok_pattern);
+        patterns.insert(tok_pattern, tok_name);
     };
 
     token_info.iter().for_each(|info| match info {
         TokenInfo::Exact(tok) => {
             add_token_name(tok.name.clone());
-            add_token_pattern(tok.pattern.clone())
+            add_token_pattern(tok.pattern.clone(), tok.name.clone())
         }
         TokenInfo::Regex(tok) => add_token_name(tok.name.clone()),
         _ => {}
@@ -193,7 +192,7 @@ fn literal(input: &str) -> IResult<&str, RawGrammarNode> {
 
 fn pattern(input: &str) -> IResult<&str, String> {
     escaped_transform(
-        take_till1(|c| c == '\'' || c == '\\'),
+        none_of(r"\'"),
         '\\',
         alt((value(r"\", tag(r"\")), value("'", tag("'")))),
     )(input)
