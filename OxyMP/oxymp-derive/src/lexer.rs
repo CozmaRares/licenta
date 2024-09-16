@@ -31,12 +31,12 @@ pub enum TokenInfo {
 }
 
 impl TokenInfo {
-    fn enum_entry_ident(name: &String) -> proc_macro2::Ident {
+    pub fn enum_entry_ident(name: &String) -> proc_macro2::Ident {
         return format_ident!("{}", name);
     }
 
-    fn struct_ident(name: &String) -> proc_macro2::Ident {
-        return format_ident!("Token_{}", name);
+    pub fn struct_ident(name: &String) -> proc_macro2::Ident {
+        return format_ident!("{}", name);
     }
 
     fn generate_idents(
@@ -183,8 +183,8 @@ fn generate_def() -> proc_macro2::TokenStream {
                 self.matches(input).map(|matched_size| {
                     let token = match &self.handler {
                         TokenHandler::Ignore   => ::std::option::Option::None ,
-                        TokenHandler::Token(t) => ::std::option::Option::Some(t()),
-                        TokenHandler::Regex(l) => ::std::option::Option::Some(l(&input[..matched_size])),
+                        TokenHandler::Token(f) => ::std::option::Option::Some(f()),
+                        TokenHandler::Regex(f) => ::std::option::Option::Some(f(&input[..matched_size])),
                     };
                     return ::std::option::Option::Some((token, &input[matched_size..]));
                 })?
@@ -266,8 +266,8 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
 fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let rules = token_info.iter().map(|tok| match tok {
         TokenInfo::Exact(ExactToken { name, pattern }) => {
-            let ident = format_ident!("{}", name);
-            let struct_ident = format_ident!("Token_{}", name);
+            let ident = TokenInfo::enum_entry_ident(name);
+            let struct_ident = TokenInfo::struct_ident(name);
 
             return quote! {
                 LexRule {
@@ -282,8 +282,8 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
             transformer_fn,
             ..
         }) => {
-            let ident = format_ident!("{}", name);
-            let struct_ident = format_ident!("Token_{}", name);
+            let ident = TokenInfo::enum_entry_ident(name);
+            let struct_ident = TokenInfo::struct_ident(name);
             let fn_ident = format_ident!("{}", transformer_fn);
 
             return quote! {
