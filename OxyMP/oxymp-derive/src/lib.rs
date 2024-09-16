@@ -1,6 +1,7 @@
 mod attribute;
 mod grammar;
 mod lexer;
+mod parser;
 
 use std::collections::HashMap;
 
@@ -66,19 +67,21 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
     let ast: syn::DeriveInput = syn::parse(input)?;
 
     let mut attr_groups = group_attrs(&ast.attrs);
-
     let grammar_attrs = match attr_groups.remove("grammar") {
         Some(v) => v,
         None => return Err(syn::Error::new(ast.span(), "Missing grammar rules.")),
     };
+
     let token_info = parse_token_attrs(attr_groups)?;
     let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
+
     let grammar_rules = aggragate_grammar_rules(grammar_rules, &token_info);
-    eprintln!("{:#?}", grammar_rules);
+    let parser = parser::generate_parser(&grammar_rules);
 
     let lexer = lexer::generate_lexer(&token_info);
 
     let output = quote! {
+        #parser
         #lexer
     };
 
