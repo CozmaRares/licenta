@@ -8,23 +8,29 @@ use crate::{
     lexer::TokenInfo,
 };
 
-pub fn generate_parser(rules: &HashMap<String, GrammarNode>) -> TokenStream {
+pub fn generate_parser(
+    parser_ident: &syn::Ident,
+    rules: &HashMap<String, GrammarNode>,
+) -> TokenStream {
     let parser_def = generate_def();
     let ast = generate_ast(rules);
+    let parser_impl = generate_impl(parser_ident, rules);
 
     quote! {
         #parser_def
         #ast
+        #parser_impl
     }
 }
 
 fn generate_def() -> TokenStream {
     quote! {
-        type Inp<'a> = &'a [Token];
-        type ParserState<'a> = ::std::result::Result<(Inp<'a>, AST), ParserError>;
+        type ParserInput = ::std::vec::Vec<Token>;
+        type ParserState<T> = ::std::result::Result<(ParserInput, T), ParseError>;
 
+        // TODO: better error handling (with enums)
         #[derive(::std::fmt::Debug)]
-        pub struct ParserError {
+        pub struct ParseError {
             pub place: ::std::string::String,
             pub reason: ::std::string::String,
         }
@@ -138,4 +144,99 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
             }
         }
     }
+}
+
+fn generate_impl(parser_ident: &syn::Ident, rules: &HashMap<String, GrammarNode>) -> TokenStream {
+    let methods = rules
+        .iter()
+        .map(|(rule, node)| generate_rule(parser_ident, rule, node));
+
+    quote! {
+        impl #parser_ident {
+            #(#methods),*
+        }
+    }
+}
+
+fn generate_rule(parser_ident: &syn::Ident, rule: &String, node: &GrammarNode) -> TokenStream {
+    let rule_ident = format_ident!("{}", rule);
+    let defs = generate_rule_def(parser_ident, rule, node);
+    let toks = defs.0;
+    let ident = defs.1;
+
+    quote! {
+        fn #rule_ident(mut inp: ParserInput) -> ParserState<#rule_ident> {
+            #toks
+            Ok((
+                inp,
+                #rule_ident(#ident)
+            ))
+        }
+    }
+}
+
+// TODO: rename
+fn generate_rule_def(
+    parser_ident: &syn::Ident,
+    rule: &String,
+    node: &GrammarNode,
+) -> (TokenStream, syn::Ident) {
+    let node_ident = format_ident!("_{}", node.index);
+
+    let toks = match &node.content {
+        GrammarNodeContent::Rule(rule) => {
+            let rule_ident = format_ident!("{}", rule);
+            quote! {
+                let (inp, #node_ident) = #parser_ident::#rule_ident(inp)?;
+                let #node_ident = ::std::boxed::Box::new(#node_ident);
+            }
+        }
+        GrammarNodeContent::Token(token) => {
+            let token_enum_entry = TokenInfo::enum_entry_ident(token);
+            let error_msg = format!("Expected a {}", token);
+            quote! {
+                let (inp, #node_ident) = {
+                    if inp.is_empty() {
+                        return Err(ParseError {
+                            place: #rule.into(),
+                            reason: "Input is empty".into(),
+                        });
+                    }
+                    let first = inp.remove(0);
+                    if let Token::#token_enum_entry(tok) = first {
+                        Ok((inp, tok))
+                    }
+                    else {
+                        Err(ParseError {
+                            place: #rule.into(),
+                            reason: #error_msg.into(),
+                        })
+                    }
+                }?;
+
+            }
+        }
+        GrammarNodeContent::Expr(exprs) => {
+            let defs = exprs
+                .iter()
+                .map(|expr| generate_rule_def(parser_ident, rule, expr));
+            let toks = defs.clone().map(|d| d.0);
+            let idents = defs.map(|d| d.1);
+
+            quote! {
+                let (inp, #node_ident) = {
+                     #(#toks)*
+
+                    Ok((
+                        inp,
+                        ( #(#idents),* )
+                    ))
+                }?;
+            }
+        }
+        GrammarNodeContent::Choice(choices, choice_idx) => todo!(),
+        GrammarNodeContent::Optional(opt) => todo!(),
+    };
+
+    (toks, node_ident)
 }

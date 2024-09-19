@@ -76,13 +76,13 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
     let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
 
     let grammar_rules = aggragate_grammar_rules(grammar_rules, &token_info);
-    let parser = parser::generate_parser(&grammar_rules);
+    let parser = parser::generate_parser(&ast.ident, &grammar_rules);
 
     let lexer = lexer::generate_lexer(&token_info);
 
     let output = quote! {
-        #parser
         #lexer
+        #parser
     };
 
     return Ok(output);

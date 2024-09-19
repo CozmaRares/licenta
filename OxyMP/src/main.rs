@@ -18,13 +18,15 @@ fn match_number(matched: &str) -> i64 {
     kind = "i64"
 )]
 #[ignore_pattern(regex = r"\s+")]
-#[grammar = r" expr -> Number ( ( '+' | '-' ) '\'' '\\' expr ) ? "]
+//#[grammar = r" expr -> Number ( ( '+' | '-' ) '\'' '\\' expr ) ? "]
+#[grammar = r"expr -> Number expr"]
 struct Parser;
 
 fn main() {
     let l = Lexer::new();
 
-    let a = l.tokenize("1+2");
+    let a = l.tokenize("1+2").unwrap();
+    let a = Parser::expr(a);
 
     println!("{:#?}", a);
 }
