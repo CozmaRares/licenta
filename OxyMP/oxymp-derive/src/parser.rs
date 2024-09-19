@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::{grammar::GrammarNode, lexer::TokenInfo};
+use crate::{
+    grammar::{GrammarNode, GrammarNodeContent},
+    lexer::TokenInfo,
+};
 
 pub fn generate_parser(rules: &HashMap<String, GrammarNode>) -> TokenStream {
     let parser_def = generate_def();
@@ -72,26 +75,22 @@ struct ASTNode {
 }
 
 fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
-    match node {
-        GrammarNode::Rule(rule) => {
+    match &node.content {
+        GrammarNodeContent::Rule(rule) => {
             let ident = format_ident!("{}", rule);
             ASTNode {
                 main_struct: quote! {::std::boxed::Box<#ident>},
                 external_choices: None,
             }
         }
-        GrammarNode::Token(token) => {
+        GrammarNodeContent::Token(token) => {
             let ident = TokenInfo::struct_ident(token);
             ASTNode {
                 main_struct: quote! { #ident },
                 external_choices: None,
             }
         }
-        GrammarNode::Expr(exprs) => {
-            if exprs.len() == 1 {
-                return generate_ast_node(rule, exprs.first().unwrap());
-            }
-
+        GrammarNodeContent::Expr(exprs) => {
             let defs = exprs.iter().map(|expr| generate_ast_node(rule, expr));
             let main_struct = defs.clone().map(|d| d.main_struct);
             let external_choices = defs.filter_map(|d| d.external_choices).flatten();
@@ -101,11 +100,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
                 external_choices: Some(external_choices.collect()),
             }
         }
-        GrammarNode::Choice(choices) => {
-            if choices.len() == 1 {
-                return generate_ast_node(rule, choices.first().unwrap());
-            }
-
+        GrammarNodeContent::Choice(choices, choice_idx) => {
             let defs = choices.iter().map(|choice| generate_ast_node(rule, choice));
             let enum_entries = defs
                 .clone()
@@ -121,7 +116,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
 
             let mut external_choices: Vec<_> =
                 defs.filter_map(|d| d.external_choices).flatten().collect();
-            let enum_ident = format_ident!("{}_choice_{}", rule, external_choices.len() + 1);
+            let enum_ident = format_ident!("{}_choice_{}", rule, choice_idx);
             external_choices.push(quote! {
                 #[derive(::std::fmt::Debug)]
                 enum #enum_ident {
@@ -134,7 +129,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
                 external_choices: Some(external_choices),
             }
         }
-        GrammarNode::Optional(opt) => {
+        GrammarNodeContent::Optional(opt) => {
             let generated = generate_ast_node(rule, opt);
             let main_struct = generated.main_struct;
             ASTNode {
