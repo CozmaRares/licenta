@@ -10,16 +10,14 @@ pub fn generate_parser(rules: &HashMap<String, GrammarNode>) -> TokenStream {
     let ast = generate_ast(rules);
 
     quote! {
-        pub mod parser {
-            #parser_def
-            #ast
-        }
+        #parser_def
+        #ast
     }
 }
 
 fn generate_def() -> TokenStream {
     quote! {
-        type Inp<'a> = &'a [super::Token];
+        type Inp<'a> = &'a [Token];
         type ParserState<'a> = ::std::result::Result<(Inp<'a>, AST), ParserError>;
 
         #[derive(::std::fmt::Debug)]
@@ -85,7 +83,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
         GrammarNode::Token(token) => {
             let ident = TokenInfo::struct_ident(token);
             ASTNode {
-                main_struct: quote! { super::#ident },
+                main_struct: quote! { #ident },
                 external_choices: None,
             }
         }
