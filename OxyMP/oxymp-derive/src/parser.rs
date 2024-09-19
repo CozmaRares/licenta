@@ -19,7 +19,7 @@ pub fn generate_parser(rules: &HashMap<String, GrammarNode>) -> TokenStream {
 
 fn generate_def() -> TokenStream {
     quote! {
-        type Inp<'a> = &'a [super::lexer::Token];
+        type Inp<'a> = &'a [super::Token];
         type ParserState<'a> = ::std::result::Result<(Inp<'a>, AST), ParserError>;
 
         #[derive(::std::fmt::Debug)]
@@ -85,7 +85,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
         GrammarNode::Token(token) => {
             let ident = TokenInfo::struct_ident(token);
             ASTNode {
-                main_struct: quote! { super::lexer::#ident },
+                main_struct: quote! { super::#ident },
                 external_choices: None,
             }
         }

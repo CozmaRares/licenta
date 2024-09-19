@@ -36,7 +36,7 @@ impl TokenInfo {
     }
 
     pub fn struct_ident(name: &String) -> proc_macro2::Ident {
-        return format_ident!("{}", name);
+        return format_ident!("Token_{}", name);
     }
 
     fn generate_idents(
@@ -126,11 +126,9 @@ pub fn generate_lexer(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let lex_rules = generate_rules(&token_info);
 
     return quote! {
-        pub mod lexer {
-            #lexer_def
-            #token_def
-            #lex_rules
-        }
+        #lexer_def
+        #token_def
+        #lex_rules
     };
 }
 

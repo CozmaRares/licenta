@@ -22,7 +22,7 @@ fn match_number(matched: &str) -> i64 {
 struct Parser;
 
 fn main() {
-    let l = lexer::Lexer::new();
+    let l = Lexer::new();
 
     let a = l.tokenize("1+2");
 
