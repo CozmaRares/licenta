@@ -31,6 +31,7 @@ pub enum TokenInfo {
 }
 
 impl TokenInfo {
+    // TODO: generate rust-friendly idents (PascalCase)
     pub fn enum_entry_ident(name: &String) -> proc_macro2::Ident {
         return format_ident!("{}", name);
     }
@@ -148,7 +149,7 @@ fn generate_def() -> proc_macro2::TokenStream {
         }
 
         enum TokenHandler {
-            Token(::std::boxed::Box<dyn ::std::ops::Fn() -> Token>),
+            Pattern(Token),
             Regex(::std::boxed::Box<dyn ::std::ops::Fn(&::core::primitive::str) -> Token>),
             Ignore,
         }
@@ -180,9 +181,9 @@ fn generate_def() -> proc_macro2::TokenStream {
             ) -> ::std::option::Option<(::std::option::Option<Token>, &'a ::core::primitive::str)> {
                 self.matches(input).map(|matched_size| {
                     let token = match &self.handler {
-                        TokenHandler::Ignore   => ::std::option::Option::None ,
-                        TokenHandler::Token(f) => ::std::option::Option::Some(f()),
-                        TokenHandler::Regex(f) => ::std::option::Option::Some(f(&input[..matched_size])),
+                        TokenHandler::Ignore     => ::std::option::Option::None ,
+                        TokenHandler::Pattern(t) => ::std::option::Option::Some(t.clone()),
+                        TokenHandler::Regex(f)   => ::std::option::Option::Some(f(&input[..matched_size])),
                     };
                     return ::std::option::Option::Some((token, &input[matched_size..]));
                 })?
@@ -270,7 +271,7 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
             return quote! {
                 LexRule {
                     matcher: TokenMatcher::Exact(#pattern.to_string()),
-                    handler: TokenHandler::Token(Box::new(|| Token::#ident(::std::rc::Rc::new(#struct_ident))))
+                    handler: TokenHandler::Pattern(Token::#ident(::std::rc::Rc::new(#struct_ident)))
                 }
             };
         }
