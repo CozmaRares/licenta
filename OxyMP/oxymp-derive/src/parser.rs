@@ -25,7 +25,7 @@ pub fn generate_parser(
 
 fn generate_def() -> TokenStream {
     quote! {
-        #[derive(::std::fmt::Debug)]
+        #[derive(::std::fmt::Debug, ::std::clone::Clone)]
         pub struct ParserInput {
             tokens: ::std::rc::Rc<[Token]>,
             current: ::core::primitive::usize,
@@ -243,18 +243,32 @@ fn generate_rule_def(
             let idents = defs.map(|d| d.1);
 
             quote! {
-                let (inp, #node_ident) = {
+                let (inp, #node_ident) = (|| {
                      #(#toks)*
 
                     Ok((
                         inp,
                         ( #(#idents),* )
                     ))
-                }?;
+                })()?;
             }
         }
         GrammarNodeContent::Choice(choices, choice_idx) => todo!(),
-        GrammarNodeContent::Optional(opt) => todo!(),
+        GrammarNodeContent::Optional(opt) => {
+            let (toks, ident) = generate_rule_def(parser_ident, rule, opt);
+
+            quote! {
+                let res: ParserState<_> = (|| {
+                    let inp = inp.clone();
+                    #toks
+                    Ok((inp, #ident))
+                })();
+                let (inp, #node_ident) =  match res {
+                    Ok((new_inp, ast)) => (new_inp, Some(ast)),
+                    Err(_) => (inp, None),
+                };
+            }
+        }
     };
 
     (toks, node_ident)
