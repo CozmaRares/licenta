@@ -92,7 +92,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
         GrammarNodeContent::Token(token) => {
             let ident = TokenInfo::struct_ident(token);
             ASTNode {
-                main_struct: quote! { #ident },
+                main_struct: quote! { ::std::rc::Rc<#ident> },
                 external_choices: None,
             }
         }

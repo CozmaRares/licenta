@@ -236,7 +236,7 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
 
     let enum_entries = idents.clone().map(|(enum_entry, struct_ident, _)| {
         return quote! {
-            #enum_entry(#struct_ident)
+            #enum_entry(::std::rc::Rc<#struct_ident>)
         };
     });
 
@@ -254,7 +254,7 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     return quote! {
         #(#structs)*
 
-        #[derive(::std::fmt::Debug)]
+        #[derive(::std::fmt::Debug, ::std::clone::Clone)]
         pub enum Token {
             #(#enum_entries),*
         }
@@ -270,7 +270,7 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
             return quote! {
                 LexRule {
                     matcher: TokenMatcher::Exact(#pattern.to_string()),
-                    handler: TokenHandler::Token(Box::new(|| Token::#ident(#struct_ident)))
+                    handler: TokenHandler::Token(Box::new(|| Token::#ident(::std::rc::Rc::new(#struct_ident))))
                 }
             };
         }
@@ -289,7 +289,7 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
                     matcher: TokenMatcher::regex(#regex),
                     handler: TokenHandler::Regex(
                         ::std::boxed::Box::new(
-                            |matched| Token::#ident(#struct_ident(crate::#fn_ident(matched)))
+                            |matched| Token::#ident(::std::rc::Rc::new(#struct_ident(#fn_ident(matched))))
                         )
                     )
 
