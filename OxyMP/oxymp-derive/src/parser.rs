@@ -187,8 +187,7 @@ fn generate_rule_def(
         GrammarNodeContent::Rule(rule) => {
             let rule_ident = format_ident!("{}", rule);
             quote! {
-                let (inp, #node_ident) = #parser_ident::#rule_ident(inp)?;
-                let #node_ident = ::std::boxed::Box::new(#node_ident);
+                let (inp, #node_ident) = #parser_ident::#rule_ident(inp).map(|(remaining, ast)| (remaining, ::std::boxed::Box::new(ast)))?;
             }
         }
         GrammarNodeContent::Token(token) => {
