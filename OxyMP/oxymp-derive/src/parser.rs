@@ -25,7 +25,34 @@ pub fn generate_parser(
 
 fn generate_def() -> TokenStream {
     quote! {
-        type ParserInput = ::std::vec::Vec<Token>;
+        #[derive(::std::fmt::Debug)]
+        pub struct ParserInput {
+            tokens: ::std::rc::Rc<[Token]>,
+            current: ::core::primitive::usize,
+        }
+        impl<T> From<T> for ParserInput
+        where
+            T: ::std::ops::Deref<Target = [Token]>,
+        {
+            fn from(tokens: T) -> Self {
+                ParserInput {
+                    tokens: tokens.deref().into(),
+                    current: 0
+                }
+            }
+        }
+        impl ParserInput {
+            pub fn get_current(&self) -> ::std::option::Option<&Token> {
+                self.tokens.get(self.current)
+            }
+
+            pub fn increment(&self) -> Self {
+                ParserInput {
+                    tokens: self.tokens.clone(),
+                    current: self.current + 1,
+                }
+            }
+        }
         type ParserState<T> = ::std::result::Result<(ParserInput, T), ParseError>;
 
         // TODO: better error handling (with enums)
@@ -165,7 +192,7 @@ fn generate_rule(parser_ident: &syn::Ident, rule: &String, node: &GrammarNode) -
     let ident = defs.1;
 
     quote! {
-        fn #rule_ident(mut inp: ParserInput) -> ParserState<#rule_ident> {
+        fn #rule_ident(inp: ParserInput) -> ParserState<#rule_ident> {
             #toks
             Ok((
                 inp,
@@ -194,25 +221,18 @@ fn generate_rule_def(
             let token_enum_entry = TokenInfo::enum_entry_ident(token);
             let error_msg = format!("Expected a {}", token);
             quote! {
-                let (inp, #node_ident) = {
-                    if inp.is_empty() {
-                        return Err(ParseError {
-                            place: #rule.into(),
-                            reason: "Input is empty".into(),
-                        });
-                    }
-                    let first = inp.remove(0);
-                    if let Token::#token_enum_entry(tok) = first {
-                        Ok((inp, tok))
-                    }
-                    else {
-                        Err(ParseError {
-                            place: #rule.into(),
-                            reason: #error_msg.into(),
-                        })
-                    }
+                let (inp, #node_ident) = match inp.get_current() {
+                    None => Err(ParseError {
+                        place: #rule.into(),
+                        reason: "Input is empty".into(),
+                    }),
+                    Some(Token::#token_enum_entry(tok)) =>
+                        Ok((inp.increment(), tok.clone())),
+                    Some(tok) => Err(ParseError {
+                        place: #rule.into(),
+                        reason: #error_msg.into(),
+                    })
                 }?;
-
             }
         }
         GrammarNodeContent::Expr(exprs) => {

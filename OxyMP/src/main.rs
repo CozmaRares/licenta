@@ -26,7 +26,7 @@ fn main() {
     let l = Lexer::new();
 
     let a = l.tokenize("1+2").unwrap();
-    let a = Parser::expr(a);
+    let a = Parser::expr(a.into());
 
     println!("{:#?}", a);
 }
