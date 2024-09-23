@@ -9,8 +9,6 @@ fn match_number(matched: &str) -> i64 {
 #[exact_token(name = "ParanRight", pattern = ")")]
 #[exact_token(name = "Plus", pattern = "+")]
 #[exact_token(name = "Minus", pattern = "-")]
-#[exact_token(name = "Apos", pattern = "'")]
-#[exact_token(name = "BkSl", pattern = r"\")]
 #[regex_token(
     name = "Number",
     regex = r"-?[0-9]+",
@@ -18,14 +16,14 @@ fn match_number(matched: &str) -> i64 {
     kind = "i64"
 )]
 #[ignore_pattern(regex = r"\s+")]
-//#[grammar = r" expr -> Number ( ( '+' | '-' ) '\'' '\\' expr ) ? "]
-#[grammar = r"expr -> Number ('+' Number)?"]
+#[grammar = r" expr -> Number ( ( '+' | '-' ) expr ) ? "]
+//#[grammar = r"expr -> Number ('+' | '-')"]
 struct Parser;
 
 fn main() {
     let l = Lexer::new();
 
-    let a = l.tokenize("1").unwrap();
+    let a = l.tokenize("1+2+3").unwrap();
     let a = Parser::expr(a.into());
 
     println!("{:#?}", a);

@@ -253,7 +253,39 @@ fn generate_rule_def(
                 })()?;
             }
         }
-        GrammarNodeContent::Choice(choices, choice_idx) => todo!(),
+        GrammarNodeContent::Choice(choices, choice_idx) => {
+            let defs = choices
+                .iter()
+                .map(|expr| generate_rule_def(parser_ident, rule, expr))
+                .enumerate()
+                .map(|(idx, (toks, ident))| {
+                    let idx_ident = format_ident!("_{}",idx+1);
+                    let choice_ident = format_ident!("{}_choice_{}", rule, choice_idx);
+
+                    quote! {
+                        let r: ParserState<_> = (|| {
+                            #toks
+                            Ok((inp, #ident))
+                        })();
+                        match r {
+                            Ok((inp, ast)) => { return Ok((inp, #choice_ident::#idx_ident(ast))); }
+                            Err(_) => {}
+                        };
+                    }
+                })
+            ;
+
+            quote! {
+                let (inp, #node_ident) =  (|| {
+                     #(#defs)*
+
+                    Err(ParseError {
+                        place: #rule.into(),
+                        reason: "All choices failed".into(),
+                    })
+                })()?;
+            }
+        }
         GrammarNodeContent::Optional(opt) => {
             let (toks, ident) = generate_rule_def(parser_ident, rule, opt);
 
