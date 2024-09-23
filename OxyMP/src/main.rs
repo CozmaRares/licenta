@@ -20,11 +20,22 @@ fn match_number(matched: &str) -> i64 {
 //#[grammar = r"expr -> Number ('+' | '-')"]
 struct Parser;
 
+impl expr {
+    fn eval(self) -> i64 {
+        match self.0 {
+            (TokenNumber(n), None) => *n,
+            (TokenNumber(n), Some((expr_choice_1::_1(_), e))) => *n + e.eval(),
+            (TokenNumber(n), Some((expr_choice_1::_2(_), e))) => *n - e.eval(),
+        }
+    }
+}
+
 fn main() {
     let l = Lexer::new();
 
     let a = l.tokenize("1+2+3").unwrap();
-    let a = Parser::expr(a.into());
+    let a = Parser::expr(a.into()).unwrap();
+    let a = a.1.eval();
 
     println!("{:#?}", a);
 }

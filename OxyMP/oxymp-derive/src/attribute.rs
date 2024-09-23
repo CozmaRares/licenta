@@ -19,7 +19,7 @@ pub struct NameValue {
 
 impl Parse for NameValue {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let name: syn::Ident = input.parse()?;
+        let name: proc_macro2::Ident = input.parse()?;
         let _eq: syn::Token![=] = input.parse()?;
         let value: syn::LitStr = input.parse()?;
         return Ok(NameValue {
@@ -46,7 +46,7 @@ impl Parse for AttributeList {
         let content_bracketed;
         let _bracketed = syn::bracketed!(content_bracketed in input);
 
-        let attr: syn::Ident = content_bracketed.parse()?;
+        let attr: proc_macro2::Ident = content_bracketed.parse()?;
 
         let content_parenthesized;
         let _parenthesized = syn::parenthesized!(content_parenthesized in content_bracketed);

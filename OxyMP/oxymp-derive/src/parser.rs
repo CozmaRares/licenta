@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 
 use crate::{
     grammar::{GrammarNode, GrammarNodeContent},
-    lexer::TokenInfo,
+    idents::{parser, tokens},
 };
 
 pub fn generate_parser(
-    parser_ident: &syn::Ident,
+    parser_ident: &proc_macro2::Ident,
     rules: &HashMap<String, GrammarNode>,
 ) -> TokenStream {
     let parser_def = generate_def();
@@ -77,7 +77,7 @@ fn generate_ast(rules: &HashMap<String, GrammarNode>) -> TokenStream {
             Some(structs) => quote! { #(#structs)* },
         };
 
-        let rule_ident = format_ident!("{}", rule);
+        let rule_ident = parser::rule_ident(rule);
 
         quote! {
             #external_choices
@@ -89,7 +89,7 @@ fn generate_ast(rules: &HashMap<String, GrammarNode>) -> TokenStream {
     });
 
     let enum_entries = rules.keys().map(|rule| {
-        let ident = format_ident!("{}", rule);
+        let ident = parser::rule_ident(rule);
         quote! { #ident(#ident) }
     });
 
@@ -110,14 +110,14 @@ struct ASTNode {
 fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
     match &node.content {
         GrammarNodeContent::Rule(rule) => {
-            let ident = format_ident!("{}", rule);
+            let ident = parser::rule_ident(rule);
             ASTNode {
                 main_struct: quote! {::std::boxed::Box<#ident>},
                 external_choices: None,
             }
         }
         GrammarNodeContent::Token(token) => {
-            let ident = TokenInfo::struct_ident(token);
+            let ident = tokens::struct_ident(token);
             ASTNode {
                 main_struct: quote! { #ident },
                 external_choices: None,
@@ -140,8 +140,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
                 .map(|d| d.main_struct)
                 .enumerate()
                 .map(|(idx, s)| {
-                    let idx_ident = format_ident!("_{}", idx + 1);
-
+                    let idx_ident = parser::idx_ident(idx + 1);
                     quote! {
                         #idx_ident(#s)
                     }
@@ -149,7 +148,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
 
             let mut external_choices: Vec<_> =
                 defs.filter_map(|d| d.external_choices).flatten().collect();
-            let enum_ident = format_ident!("{}_choice_{}", rule, choice_idx);
+            let enum_ident = parser::choice_ident(rule, *choice_idx);
             external_choices.push(quote! {
                 #[derive(::std::fmt::Debug)]
                 enum #enum_ident {
@@ -173,7 +172,10 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
     }
 }
 
-fn generate_impl(parser_ident: &syn::Ident, rules: &HashMap<String, GrammarNode>) -> TokenStream {
+fn generate_impl(
+    parser_ident: &proc_macro2::Ident,
+    rules: &HashMap<String, GrammarNode>,
+) -> TokenStream {
     let methods = rules
         .iter()
         .map(|(rule, node)| generate_rule(parser_ident, rule, node));
@@ -185,8 +187,12 @@ fn generate_impl(parser_ident: &syn::Ident, rules: &HashMap<String, GrammarNode>
     }
 }
 
-fn generate_rule(parser_ident: &syn::Ident, rule: &String, node: &GrammarNode) -> TokenStream {
-    let rule_ident = format_ident!("{}", rule);
+fn generate_rule(
+    parser_ident: &proc_macro2::Ident,
+    rule: &String,
+    node: &GrammarNode,
+) -> TokenStream {
+    let rule_ident = parser::rule_ident(rule);
     let defs = generate_rule_def(parser_ident, rule, node);
     let toks = defs.0;
     let ident = defs.1;
@@ -194,7 +200,7 @@ fn generate_rule(parser_ident: &syn::Ident, rule: &String, node: &GrammarNode) -
     quote! {
         fn #rule_ident(inp: ParserInput) -> ParserState<#rule_ident> {
             #toks
-            Ok((
+            ::std::result::Result::Ok((
                 inp,
                 #rule_ident(#ident)
             ))
@@ -202,33 +208,34 @@ fn generate_rule(parser_ident: &syn::Ident, rule: &String, node: &GrammarNode) -
     }
 }
 
-// TODO: rename
 fn generate_rule_def(
-    parser_ident: &syn::Ident,
+    parser_ident: &proc_macro2::Ident,
     rule: &String,
     node: &GrammarNode,
-) -> (TokenStream, syn::Ident) {
-    let node_ident = format_ident!("_{}", node.index);
+) -> (TokenStream, proc_macro2::Ident) {
+    let node_ident = parser::idx_ident(node.index);
 
     let toks = match &node.content {
         GrammarNodeContent::Rule(rule) => {
-            let rule_ident = format_ident!("{}", rule);
+            let rule_ident = parser::rule_ident(rule);
             quote! {
-                let (inp, #node_ident) = #parser_ident::#rule_ident(inp).map(|(remaining, ast)| (remaining, ::std::boxed::Box::new(ast)))?;
+                let (inp, #node_ident) =
+                    #parser_ident::#rule_ident(inp)
+                        .map(|(remaining, ast)| (remaining, ::std::boxed::Box::new(ast)))?;
             }
         }
         GrammarNodeContent::Token(token) => {
-            let token_enum_entry = TokenInfo::enum_entry_ident(token);
+            let token_enum_entry = tokens::enum_ident(token);
             let error_msg = format!("Expected a {}", token);
             quote! {
                 let (inp, #node_ident) = match inp.get_current() {
-                    None => Err(ParseError {
+                    ::std::option::Option::None => ::std::result::Result::Err(ParseError {
                         place: #rule.into(),
                         reason: "Input is empty".into(),
                     }),
-                    Some(Token::#token_enum_entry(tok)) =>
-                        Ok((inp.increment(), tok.clone())),
-                    Some(tok) => Err(ParseError {
+                    ::std::option::Option::Some(Token::#token_enum_entry(tok)) =>
+                        ::std::result::Result::Ok((inp.increment(), tok.clone())),
+                    ::std::option::Option::Some(tok) => ::std::result::Result::Err(ParseError {
                         place: #rule.into(),
                         reason: #error_msg.into(),
                     })
@@ -246,7 +253,7 @@ fn generate_rule_def(
                 let (inp, #node_ident) = (|| {
                      #(#toks)*
 
-                    Ok((
+                    ::std::result::Result::Ok((
                         inp,
                         ( #(#idents),* )
                     ))
@@ -259,27 +266,28 @@ fn generate_rule_def(
                 .map(|expr| generate_rule_def(parser_ident, rule, expr))
                 .enumerate()
                 .map(|(idx, (toks, ident))| {
-                    let idx_ident = format_ident!("_{}",idx+1);
-                    let choice_ident = format_ident!("{}_choice_{}", rule, choice_idx);
+                    let idx_ident = parser::idx_ident(idx + 1);
+                    let choice_ident = parser::choice_ident(rule, *choice_idx);
 
                     quote! {
                         let r: ParserState<_> = (|| {
                             #toks
-                            Ok((inp, #ident))
+                            ::std::result::Result::Ok((inp, #ident))
                         })();
                         match r {
-                            Ok((inp, ast)) => { return Ok((inp, #choice_ident::#idx_ident(ast))); }
-                            Err(_) => {}
+                            ::std::result::Result::Ok((inp, ast)) => {
+                                return ::std::result::Result::Ok((inp, #choice_ident::#idx_ident(ast)));
+                            }
+                            ::std::result::Result::Err(_) => {}
                         };
                     }
-                })
-            ;
+                });
 
             quote! {
                 let (inp, #node_ident) =  (|| {
                      #(#defs)*
 
-                    Err(ParseError {
+                    ::std::result::Result::Err(ParseError {
                         place: #rule.into(),
                         reason: "All choices failed".into(),
                     })
@@ -293,11 +301,11 @@ fn generate_rule_def(
                 let res: ParserState<_> = (|| {
                     let inp = inp.clone();
                     #toks
-                    Ok((inp, #ident))
+                    ::std::result::Result::Ok((inp, #ident))
                 })();
                 let (inp, #node_ident) =  match res {
-                    Ok((new_inp, ast)) => (new_inp, Some(ast)),
-                    Err(_) => (inp, None),
+                    ::std::result::Result::Ok((new_inp, ast)) => (new_inp, ::std::option::Option::Some(ast)),
+                    ::std::result::Result::Err(_) => (inp, ::std::option::Option::None),
                 };
             }
         }

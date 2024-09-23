@@ -1,8 +1,11 @@
 use std::collections::HashSet;
 
-use quote::{format_ident, quote};
+use quote::quote;
 
-use crate::attribute::AttributeList;
+use crate::{
+    attribute::AttributeList,
+    idents::{base_ident, tokens::*},
+};
 
 #[derive(Debug)]
 pub struct ExactToken {
@@ -31,15 +34,6 @@ pub enum TokenInfo {
 }
 
 impl TokenInfo {
-    // TODO: generate rust-friendly idents (PascalCase)
-    pub fn enum_entry_ident(name: &String) -> proc_macro2::Ident {
-        return format_ident!("{}", name);
-    }
-
-    pub fn struct_ident(name: &String) -> proc_macro2::Ident {
-        return format_ident!("Token_{}", name);
-    }
-
     fn generate_idents(
         &self,
     ) -> Option<(
@@ -48,16 +42,12 @@ impl TokenInfo {
         Option<proc_macro2::Ident>,
     )> {
         match self {
-            TokenInfo::Exact(ExactToken { name, .. }) => Some((
-                TokenInfo::enum_entry_ident(name),
-                TokenInfo::struct_ident(name),
-                None,
-            )),
-            TokenInfo::Regex(RegexToken { name, kind, .. }) => Some((
-                TokenInfo::enum_entry_ident(name),
-                TokenInfo::struct_ident(name),
-                Some(format_ident!("{}", kind)),
-            )),
+            TokenInfo::Exact(ExactToken { name, .. }) => {
+                Some((enum_ident(name), struct_ident(name), None))
+            }
+            TokenInfo::Regex(RegexToken { name, kind, .. }) => {
+                Some((enum_ident(name), struct_ident(name), Some(base_ident(kind))))
+            }
             _ => None,
         }
     }
@@ -241,16 +231,21 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
         };
     });
 
-    let structs = idents.map(|idents| match idents {
-        (_, struct_ident, None) => quote! {
-            #[derive(::std::fmt::Debug, ::std::clone::Clone)]
-            pub struct #struct_ident;
-        },
-        (_, struct_ident, Some(kind_ident)) => quote! {
-            #[derive(::std::fmt::Debug, ::std::clone::Clone)]
-            pub struct #struct_ident(pub ::std::rc::Rc<#kind_ident>);
-        },
-    });
+    let structs = idents
+        .map(|idents| match idents {
+            (_, struct_ident, None) => quote! {
+                pub struct #struct_ident;
+            },
+            (_, struct_ident, Some(kind_ident)) => quote! {
+                pub struct #struct_ident(pub ::std::rc::Rc<#kind_ident>);
+            },
+        })
+        .map(|struct_def| {
+            quote! {
+                #[derive(::std::fmt::Debug, ::std::clone::Clone)]
+                #struct_def
+            }
+        });
 
     return quote! {
         #(#structs)*
@@ -265,13 +260,13 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
 fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let rules = token_info.iter().map(|tok| match tok {
         TokenInfo::Exact(ExactToken { name, pattern }) => {
-            let ident = TokenInfo::enum_entry_ident(name);
-            let struct_ident = TokenInfo::struct_ident(name);
+            let enum_ident = enum_ident(name);
+            let struct_ident = struct_ident(name);
 
             return quote! {
                 LexRule {
                     matcher: TokenMatcher::Exact(#pattern.to_string()),
-                    handler: TokenHandler::Pattern(Token::#ident(#struct_ident))
+                    handler: TokenHandler::Pattern(Token::#enum_ident(#struct_ident))
                 }
             };
         }
@@ -281,19 +276,18 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
             transformer_fn,
             ..
         }) => {
-            let ident = TokenInfo::enum_entry_ident(name);
-            let struct_ident = TokenInfo::struct_ident(name);
-            let fn_ident = format_ident!("{}", transformer_fn);
+            let enum_ident = enum_ident(name);
+            let struct_ident = struct_ident(name);
+            let fn_ident = base_ident(transformer_fn);
 
             return quote! {
                 LexRule {
                     matcher: TokenMatcher::regex(#regex),
                     handler: TokenHandler::Regex(
                         ::std::boxed::Box::new(
-                            |matched| Token::#ident(#struct_ident(::std::rc::Rc::new(#fn_ident(matched))))
+                            |matched| Token::#enum_ident(#struct_ident(::std::rc::Rc::new(#fn_ident(matched))))
                         )
                     )
-
                 }
             };
         }
