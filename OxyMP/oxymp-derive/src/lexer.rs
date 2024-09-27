@@ -57,12 +57,12 @@ impl TokenInfo {
     //#[exact_token(name = "Minus", pattern = "-")]
     pub fn exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
         let mut expected_properties = HashSet::new();
-        expected_properties.insert("name".to_string());
-        expected_properties.insert("pattern".to_string());
+        expected_properties.insert("name");
+        expected_properties.insert("pattern");
 
         let map = AttributeList::prepare_token_info(
             tokens,
-            "exact_token".to_string(),
+            "exact_token",
             expected_properties,
         )?;
 
@@ -75,14 +75,14 @@ impl TokenInfo {
     //#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64")]
     pub fn regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
         let mut expected_properties = HashSet::new();
-        expected_properties.insert("name".to_string());
-        expected_properties.insert("regex".to_string());
-        expected_properties.insert("transformer_fn".to_string());
-        expected_properties.insert("kind".to_string());
+        expected_properties.insert("name");
+        expected_properties.insert("regex");
+        expected_properties.insert("transformer_fn");
+        expected_properties.insert("kind");
 
         let map = AttributeList::prepare_token_info(
             tokens,
-            "regex_token".to_string(),
+            "regex_token",
             expected_properties,
         )?;
 
@@ -97,11 +97,11 @@ impl TokenInfo {
     //#[ignore_pattern(regex = r"\s+")]
     pub fn ignore_pattern(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
         let mut expected_properties = HashSet::new();
-        expected_properties.insert("regex".to_string());
+        expected_properties.insert("regex");
 
         let map = AttributeList::prepare_token_info(
             tokens,
-            "ignore_pattern".to_string(),
+            "ignore_pattern",
             expected_properties,
         )?;
 

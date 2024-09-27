@@ -90,12 +90,12 @@ impl Parse for AttributeNameValue {
 impl AttributeList {
     pub fn prepare_token_info(
         tokens: proc_macro2::TokenStream,
-        expected_attribute_name: String,
-        expected_properties: HashSet<String>,
-    ) -> syn::Result<HashMap<String, String>> {
+        expected_attribute_name: &str,
+        expected_properties: HashSet<&str>,
+    ) -> syn::Result<HashMap<Rc<str>, Rc<str>>> {
         let parsed_attribute: AttributeList = syn::parse2(tokens)?;
 
-        if *parsed_attribute.attr.content != expected_attribute_name {
+        if *parsed_attribute.attr.content != *expected_attribute_name {
             return Err(syn::Error::new(
                 parsed_attribute.attr.span,
                 format!(
@@ -139,7 +139,7 @@ impl AttributeList {
         return Ok(parsed_attribute.pairs.iter().fold(
             HashMap::new(),
             |mut acc, NameValue { name, value }| {
-                acc.insert(name.content.to_string(), value.to_string());
+                acc.insert(name.content.clone(), value.clone());
                 acc
             },
         ));
