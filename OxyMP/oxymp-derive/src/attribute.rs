@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use syn::{
     parse::{Parse, ParseStream},
@@ -6,15 +9,18 @@ use syn::{
 };
 
 #[derive(Debug)]
-pub struct Spanned<T> {
-    pub content: T,
+pub struct Spanned<T>
+where
+    T: ?Sized,
+{
+    pub content: Rc<T>,
     pub span: proc_macro2::Span,
 }
 
 #[derive(Debug)]
 pub struct NameValue {
-    pub name: Spanned<String>,
-    pub value: String,
+    pub name: Spanned<str>,
+    pub value: Rc<str>,
 }
 
 impl Parse for NameValue {
@@ -24,17 +30,17 @@ impl Parse for NameValue {
         let value: syn::LitStr = input.parse()?;
         return Ok(NameValue {
             name: Spanned {
-                content: name.to_string(),
+                content: name.to_string().into(),
                 span: name.span(),
             },
-            value: value.value(),
+            value: value.value().into(),
         });
     }
 }
 
 #[derive(Debug)]
 pub struct AttributeList {
-    pub attr: Spanned<String>,
+    pub attr: Spanned<str>,
     pub pairs: Vec<NameValue>,
 }
 
@@ -56,7 +62,7 @@ impl Parse for AttributeList {
 
         return Ok(AttributeList {
             attr: Spanned {
-                content: attr.to_string(),
+                content: attr.to_string().into(),
                 span: attr.span(),
             },
             pairs: pairs.into_iter().collect(),
@@ -89,7 +95,7 @@ impl AttributeList {
     ) -> syn::Result<HashMap<String, String>> {
         let parsed_attribute: AttributeList = syn::parse2(tokens)?;
 
-        if parsed_attribute.attr.content != expected_attribute_name {
+        if *parsed_attribute.attr.content != expected_attribute_name {
             return Err(syn::Error::new(
                 parsed_attribute.attr.span,
                 format!(
@@ -99,19 +105,19 @@ impl AttributeList {
             ));
         }
 
-        let mut found_properties: HashSet<&String> = HashSet::new();
+        let mut found_properties: HashSet<&str> = HashSet::new();
 
         for pair in &parsed_attribute.pairs {
             let NameValue { name, .. } = pair;
 
-            if !expected_properties.contains(&name.content) {
+            if !expected_properties.contains(&*name.content) {
                 return Err(syn::Error::new(
                     name.span,
                     format!("Unknown property: {}", name.content),
                 ));
             }
 
-            if found_properties.contains(&name.content) {
+            if found_properties.contains(&*name.content) {
                 return Err(syn::Error::new(
                     name.span,
                     format!("Duplicated property: {}", name.content),
@@ -122,7 +128,7 @@ impl AttributeList {
         }
 
         for expected_property in expected_properties {
-            if !found_properties.contains(&expected_property) {
+            if !found_properties.contains(&*expected_property) {
                 return Err(syn::Error::new(
                     parsed_attribute.attr.span,
                     format!("Missing property: {}", expected_property),
@@ -133,7 +139,7 @@ impl AttributeList {
         return Ok(parsed_attribute.pairs.iter().fold(
             HashMap::new(),
             |mut acc, NameValue { name, value }| {
-                acc.insert(name.content.clone(), value.to_string());
+                acc.insert(name.content.to_string(), value.to_string());
                 acc
             },
         ));
