@@ -198,10 +198,10 @@ pub fn aggragate_grammar_rules(
 
     token_info.iter().for_each(|info| match info {
         TokenInfo::Exact(tok) => {
-            add_token_name(tok.name.clone());
-            add_token_pattern(tok.pattern.clone(), tok.name.clone())
+            add_token_name(tok.name.to_string());
+            add_token_pattern(tok.pattern.to_string(), tok.name.to_string())
         }
-        TokenInfo::Regex(tok) => add_token_name(tok.name.clone()),
+        TokenInfo::Regex(tok) => add_token_name(tok.name.to_string()),
         _ => {}
     });
 

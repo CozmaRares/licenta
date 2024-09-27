@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, rc::Rc};
 
 use quote::quote;
 
@@ -9,21 +9,21 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ExactToken {
-    pub name: String,
-    pub pattern: String,
+    pub name: Rc<str>,
+    pub pattern: Rc<str>,
 }
 
 #[derive(Debug)]
 pub struct RegexToken {
-    pub name: String,
-    pub regex: String,
-    pub transformer_fn: String,
-    pub kind: String,
+    pub name: Rc<str>,
+    pub regex: Rc<str>,
+    pub transformer_fn: Rc<str>,
+    pub kind: Rc<str>,
 }
 
 #[derive(Debug)]
 pub struct IgnorePattern {
-    pub regex: String,
+    pub regex: Rc<str>,
 }
 
 #[derive(Debug)]
@@ -67,8 +67,8 @@ impl TokenInfo {
         )?;
 
         return Ok(TokenInfo::Exact(ExactToken {
-            name: map.get("name").unwrap().to_string(),
-            pattern: map.get("pattern").unwrap().to_string(),
+            name: map.get("name").unwrap().clone(),
+            pattern: map.get("pattern").unwrap().clone(),
         }));
     }
 
@@ -87,10 +87,10 @@ impl TokenInfo {
         )?;
 
         return Ok(TokenInfo::Regex(RegexToken {
-            name: map.get("name").unwrap().to_string(),
-            regex: map.get("regex").unwrap().to_string(),
-            transformer_fn: map.get("transformer_fn").unwrap().to_string(),
-            kind: map.get("kind").unwrap().to_string(),
+            name: map.get("name").unwrap().clone(),
+            regex: map.get("regex").unwrap().clone(),
+            transformer_fn: map.get("transformer_fn").unwrap().clone(),
+            kind: map.get("kind").unwrap().clone(),
         }));
     }
 
@@ -106,7 +106,7 @@ impl TokenInfo {
         )?;
 
         return Ok(TokenInfo::Ignore(IgnorePattern {
-            regex: map.get("regex").unwrap().to_string(),
+            regex: map.get("regex").unwrap().clone(),
         }));
     }
 }
