@@ -4,7 +4,7 @@ mod idents;
 mod lexer;
 mod parser;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use attribute::{AttributeNameValue, NameValue};
 use grammar::{aggragate_grammar_rules, new_grammar_rule, RawGrammarRule};
@@ -13,9 +13,9 @@ use syn::spanned::Spanned;
 
 use crate::lexer::TokenInfo;
 
-fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::TokenStream>> {
+fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<Rc<str>, Vec<proc_macro2::TokenStream>> {
     return attrs.iter().fold(HashMap::new(), |mut acc, attr| {
-        let attr_ident = attr.path().segments.first().unwrap().ident.to_string();
+        let attr_ident = attr.path().segments.first().unwrap().ident.to_string().into();
 
         acc.entry(attr_ident)
             .or_insert_with(Vec::new)
@@ -26,19 +26,19 @@ fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<String, Vec<proc_macro2::
 }
 
 fn parse_token_attrs(
-    attr_groups: HashMap<String, Vec<proc_macro2::TokenStream>>,
+    attr_groups: HashMap<Rc<str>, Vec<proc_macro2::TokenStream>>,
 ) -> syn::Result<Vec<TokenInfo>> {
     type CreateTokenInfo = dyn Fn(proc_macro2::TokenStream) -> syn::Result<TokenInfo>;
-    let mut token_type_handlers: HashMap<String, &CreateTokenInfo> = HashMap::new();
-    token_type_handlers.insert("exact_token".to_string(), &TokenInfo::exact_token);
-    token_type_handlers.insert("regex_token".to_string(), &TokenInfo::regex_token);
-    token_type_handlers.insert("ignore_pattern".to_string(), &TokenInfo::ignore_pattern);
+    let mut token_type_handlers: HashMap<&str, &CreateTokenInfo> = HashMap::new();
+    token_type_handlers.insert("exact_token", &TokenInfo::exact_token);
+    token_type_handlers.insert("regex_token", &TokenInfo::regex_token);
+    token_type_handlers.insert("ignore_pattern", &TokenInfo::ignore_pattern);
 
     let mut token_info = Vec::new();
 
     for (attr, streams) in attr_groups {
         for stream in streams {
-            match token_type_handlers.get(&attr) {
+            match token_type_handlers.get(&*attr) {
                 Some(handler) => token_info.push(handler(stream)?),
                 None => {}
             }

@@ -1,5 +1,5 @@
 use core::panic;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use nom::{
     branch::alt,
@@ -15,8 +15,8 @@ use crate::lexer::TokenInfo;
 
 #[derive(Debug)]
 enum RawGrammarNode {
-    Name(String),
-    Pattern(String),
+    Name(Rc<str>),
+    Pattern(Rc<str>),
     Expr(Vec<RawGrammarNode>),
     Choice(Vec<RawGrammarNode>),
     Optional(Box<RawGrammarNode>),
@@ -24,8 +24,8 @@ enum RawGrammarNode {
 
 #[derive(Debug)]
 pub enum GrammarNodeContent {
-    Rule(String),
-    Token(String),
+    Rule(Rc<str>),
+    Token(Rc<str>),
     Expr(Vec<GrammarNode>),
     Choice(Vec<GrammarNode>, usize),
     Optional(Box<GrammarNode>),
@@ -45,13 +45,13 @@ enum NameType {
 impl GrammarNode {
     fn from_raw(
         node: RawGrammarNode,
-        names: &HashMap<String, NameType>,
-        patterns: &HashMap<String, String>,
+        names: &HashMap<Rc<str>, NameType>,
+        patterns: &HashMap<Rc<str>, Rc<str>>,
         node_idx: usize,
         choice_idx: usize,
     ) -> (Self, usize, usize) {
         match node {
-            RawGrammarNode::Name(name) => match names.get(&name) {
+            RawGrammarNode::Name(name) => match names.get(&*name) {
                 None => panic!("Error when parsing grammar rules\nUnknown name: {}", name),
                 Some(ty) => (
                     match ty {
@@ -68,77 +68,83 @@ impl GrammarNode {
                     choice_idx,
                 ),
             },
-            RawGrammarNode::Pattern(pattern) => match patterns.get(&pattern) {
+            RawGrammarNode::Pattern(pattern) => match patterns.get(&*pattern) {
                 None => panic!(
                     "Error when parsing grammar rules\nUnknown token pattern: {}",
                     pattern
                 ),
                 Some(tok) => (
                     GrammarNode {
-                        content: GrammarNodeContent::Token(tok.to_string()),
+                        content: GrammarNodeContent::Token(tok.to_string().into()),
                         index: node_idx,
                     },
                     node_idx + 1,
                     choice_idx,
                 ),
             },
-            RawGrammarNode::Expr(mut exprs) => {
+            RawGrammarNode::Expr(exprs) => {
                 if exprs.len() == 1 {
+                    let mut exprs = exprs;
                     let expr = exprs.pop().unwrap();
                     return GrammarNode::from_raw(expr, names, patterns, node_idx, choice_idx);
                 }
 
                 let mut node_idx = node_idx;
                 let mut choice_idx = choice_idx;
-                let mut exp = Vec::new();
+                let exprs = exprs
+                    .into_iter()
+                    .map(|expr| {
+                        let node;
+                        (node, node_idx, choice_idx) =
+                            GrammarNode::from_raw(expr, names, patterns, node_idx, choice_idx);
 
-                for expr in exprs {
-                    let node;
-                    (node, node_idx, choice_idx) =
-                        GrammarNode::from_raw(expr, names, patterns, node_idx, choice_idx);
-
-                    exp.push(node);
-                }
+                        node
+                    })
+                    .collect::<Vec<_>>()
+                    .into();
 
                 (
                     GrammarNode {
-                        content: GrammarNodeContent::Expr(exp),
+                        content: GrammarNodeContent::Expr(exprs),
                         index: node_idx,
                     },
                     node_idx + 1,
                     choice_idx,
                 )
             }
-            RawGrammarNode::Choice(mut choices) => {
+            RawGrammarNode::Choice(choices) => {
                 if choices.len() == 1 {
+                    let mut choices = choices;
                     let choice = choices.pop().unwrap();
                     return GrammarNode::from_raw(choice, names, patterns, node_idx, choice_idx);
                 }
 
                 let mut node_idx = node_idx;
                 let mut choice_idx = choice_idx;
-                let mut cho = Vec::new();
+                let choices = choices
+                    .into_iter()
+                    .map(|choice| {
+                        let node;
+                        (node, node_idx, choice_idx) =
+                            GrammarNode::from_raw(choice, names, patterns, node_idx, choice_idx);
 
-                for choice in choices {
-                    let node;
-                    (node, node_idx, choice_idx) =
-                        GrammarNode::from_raw(choice, names, patterns, node_idx, choice_idx);
-
-                    cho.push(node);
-                }
+                        node
+                    })
+                    .collect::<Vec<_>>()
+                    .into();
 
                 (
                     GrammarNode {
-                        content: GrammarNodeContent::Choice(cho, choice_idx),
+                        content: GrammarNodeContent::Choice(choices, choice_idx),
                         index: node_idx,
                     },
                     node_idx + 1,
                     choice_idx + 1,
                 )
             }
-            RawGrammarNode::Optional(expr) => {
+            RawGrammarNode::Optional(opt) => {
                 let (opt, node_idx, choice_idx) =
-                    GrammarNode::from_raw(*expr, names, patterns, node_idx, choice_idx);
+                    GrammarNode::from_raw(*opt, names, patterns, node_idx, choice_idx);
 
                 (
                     GrammarNode {
@@ -155,7 +161,7 @@ impl GrammarNode {
 
 #[derive(Debug)]
 pub struct RawGrammarRule {
-    name: String,
+    name: Rc<str>,
     rule: RawGrammarNode,
 }
 
@@ -166,7 +172,7 @@ pub fn new_grammar_rule(rule: &str) -> Result<RawGrammarRule, nom::Err<nom::erro
 pub fn aggragate_grammar_rules(
     rules: Vec<RawGrammarRule>,
     token_info: &Vec<TokenInfo>,
-) -> HashMap<String, GrammarNode> {
+) -> HashMap<Rc<str>, GrammarNode> {
     let mut names = HashMap::new();
     let mut patterns = HashMap::new();
 
@@ -198,10 +204,10 @@ pub fn aggragate_grammar_rules(
 
     token_info.iter().for_each(|info| match info {
         TokenInfo::Exact(tok) => {
-            add_token_name(tok.name.to_string());
-            add_token_pattern(tok.pattern.to_string(), tok.name.to_string())
+            add_token_name(tok.name.clone());
+            add_token_pattern(tok.pattern.clone(), tok.name.clone())
         }
-        TokenInfo::Regex(tok) => add_token_name(tok.name.to_string()),
+        TokenInfo::Regex(tok) => add_token_name(tok.name.clone()),
         _ => {}
     });
 
@@ -254,7 +260,7 @@ fn name(input: &str) -> IResult<&str, RawGrammarNode> {
 
 fn expr(input: &str) -> IResult<&str, RawGrammarNode> {
     let (input, exprs) = many1(expr1)(input)?;
-    Ok((input, RawGrammarNode::Expr(exprs)))
+    Ok((input, RawGrammarNode::Expr(exprs.into())))
 }
 
 fn expr1(input: &str) -> IResult<&str, RawGrammarNode> {
@@ -277,7 +283,7 @@ fn pattern(input: &str) -> IResult<&str, String> {
 
 fn token(input: &str) -> IResult<&str, RawGrammarNode> {
     let (input, matched) = ws(delimited(char('\''), pattern, char('\'')))(input)?;
-    Ok((input, RawGrammarNode::Pattern(matched)))
+    Ok((input, RawGrammarNode::Pattern(matched.into())))
 }
 
 fn optional(input: &str) -> IResult<&str, RawGrammarNode> {
@@ -288,5 +294,5 @@ fn optional(input: &str) -> IResult<&str, RawGrammarNode> {
 
 fn choice(input: &str) -> IResult<&str, RawGrammarNode> {
     let (input, choices) = paranthesized(separated_list1(char('|'), expr))(input)?;
-    Ok((input, RawGrammarNode::Choice(choices)))
+    Ok((input, RawGrammarNode::Choice(choices.into())))
 }

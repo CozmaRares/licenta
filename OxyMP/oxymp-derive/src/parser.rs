@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -10,7 +10,7 @@ use crate::{
 
 pub fn generate_parser(
     parser_ident: &proc_macro2::Ident,
-    rules: &HashMap<String, GrammarNode>,
+    rules: &HashMap<Rc<str>, GrammarNode>,
 ) -> TokenStream {
     let parser_def = generate_def();
     let ast = generate_ast(rules);
@@ -65,7 +65,7 @@ fn generate_def() -> TokenStream {
     }
 }
 
-fn generate_ast(rules: &HashMap<String, GrammarNode>) -> TokenStream {
+fn generate_ast(rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
     let structs = rules.iter().map(|(rule, node)| {
         let ASTNode {
             main_struct,
@@ -107,7 +107,7 @@ struct ASTNode {
     external_choices: Option<Vec<TokenStream>>,
 }
 
-fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
+fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
     match &node.content {
         GrammarNodeContent::Rule(rule) => {
             let ident = parser::rule_ident(rule);
@@ -174,7 +174,7 @@ fn generate_ast_node(rule: &String, node: &GrammarNode) -> ASTNode {
 
 fn generate_impl(
     parser_ident: &proc_macro2::Ident,
-    rules: &HashMap<String, GrammarNode>,
+    rules: &HashMap<Rc<str>, GrammarNode>,
 ) -> TokenStream {
     let methods = rules
         .iter()
@@ -189,7 +189,7 @@ fn generate_impl(
 
 fn generate_rule(
     parser_ident: &proc_macro2::Ident,
-    rule: &String,
+    rule: &str,
     node: &GrammarNode,
 ) -> TokenStream {
     let rule_ident = parser::rule_ident(rule);
@@ -210,7 +210,7 @@ fn generate_rule(
 
 fn generate_rule_def(
     parser_ident: &proc_macro2::Ident,
-    rule: &String,
+    rule: &str,
     node: &GrammarNode,
 ) -> (TokenStream, proc_macro2::Ident) {
     let node_ident = parser::idx_ident(node.index);
