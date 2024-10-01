@@ -17,7 +17,6 @@ fn match_number(matched: &str) -> i64 {
 )]
 #[ignore_pattern(regex = r"\s+")]
 #[grammar = r" expr -> Number ( ( '+' | '-' ) expr ) ? "]
-//#[grammar = r"expr -> Number ('+' | '-')"]
 struct Parser;
 
 impl expr {
@@ -35,7 +34,7 @@ fn main() {
 
     let a = l.tokenize("1+2+3").unwrap();
     let a = Parser::expr(a.into()).unwrap();
-    let a = a.1.eval();
+    //let a = a.1.eval();
 
     println!("{:#?}", a);
 }

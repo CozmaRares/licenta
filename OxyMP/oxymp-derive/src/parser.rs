@@ -55,7 +55,6 @@ fn generate_def() -> TokenStream {
         }
         type ParserState<T> = ::std::result::Result<(ParserInput, T), ParseError>;
 
-        // TODO: better error handling (with enums)
         #[derive(::std::fmt::Debug)]
         pub struct ParseError {
             pub place: ::std::string::String,
