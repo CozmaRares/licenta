@@ -34,7 +34,7 @@ fn generate_def() -> TokenStream {
         where
             T: ::std::ops::Deref<Target = [Token]>,
         {
-            fn from(tokens: T) -> Self {
+            fn from(tokens: T) -> ParserInput {
                 ParserInput {
                     tokens: tokens.deref().into(),
                     current: 0
@@ -46,7 +46,7 @@ fn generate_def() -> TokenStream {
                 self.tokens.get(self.current)
             }
 
-            pub fn increment(&self) -> Self {
+            pub fn increment(&self) -> ParserInput {
                 ParserInput {
                     tokens: self.tokens.clone(),
                     current: self.current + 1,

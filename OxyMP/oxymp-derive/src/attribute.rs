@@ -26,7 +26,7 @@ struct NameValue {
 }
 
 impl Parse for NameValue {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<NameValue> {
         let name: proc_macro2::Ident = input.parse()?;
         let _eq: syn::Token![=] = input.parse()?;
         let value: syn::LitStr = input.parse()?;
@@ -47,7 +47,7 @@ struct AttributeList {
 
 impl Parse for AttributeList {
     /// Parse `#[attr(a = "1", b = "2", ...)]`
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<AttributeList> {
         let _hash: syn::Token![#] = input.parse()?;
 
         let content_bracketed;
@@ -75,7 +75,7 @@ struct AttributeNameValue(NameValue);
 
 impl Parse for AttributeNameValue {
     /// Parse `#[attr = "1"]`
-    fn parse(input: ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<AttributeNameValue> {
         let _hash: syn::Token![#] = input.parse()?;
 
         let content_bracketed;

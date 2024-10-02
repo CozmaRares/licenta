@@ -25,7 +25,7 @@ fn generate_def() -> proc_macro2::TokenStream {
         }
 
         impl TokenMatcher {
-            fn regex(re: &::core::primitive::str) -> Self {
+            fn regex(re: &::core::primitive::str) -> TokenMatcher {
                 let re = ::std::format!("^{re}");
                 let re = ::regex::Regex::new(&re).unwrap();
                 return TokenMatcher::Regex(re);
@@ -211,7 +211,7 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
 
     return quote! {
         impl Lexer {
-            pub fn new() -> Self {
+            pub fn new() -> Lexer {
                 return Lexer { rules: ::std::vec![#(#rules),*] };
             }
         }

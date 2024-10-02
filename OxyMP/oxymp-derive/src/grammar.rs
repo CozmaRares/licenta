@@ -49,7 +49,7 @@ impl GrammarNode {
         patterns: &HashMap<Rc<str>, Rc<str>>,
         node_idx: usize,
         choice_idx: usize,
-    ) -> (Self, usize, usize) {
+    ) -> (GrammarNode, usize, usize) {
         match node {
             RawGrammarNode::Name(name) => match names.get(&*name) {
                 None => panic!("Error when parsing grammar rules\nUnknown name: {}", name),
