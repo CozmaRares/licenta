@@ -10,15 +10,15 @@ pub fn generate_lexer(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let token_def = generate_tokens(&token_info);
     let lex_rules = generate_rules(&token_info);
 
-    return quote! {
+    quote! {
         #lexer_def
         #token_def
         #lex_rules
-    };
+    }
 }
 
 fn generate_def() -> proc_macro2::TokenStream {
-    return quote! {
+    quote! {
         enum TokenMatcher {
             Exact(::std::string::String),
             Regex(::regex::Regex),
@@ -28,7 +28,7 @@ fn generate_def() -> proc_macro2::TokenStream {
             fn regex(re: &::core::primitive::str) -> TokenMatcher {
                 let re = ::std::format!("^{re}");
                 let re = ::regex::Regex::new(&re).unwrap();
-                return TokenMatcher::Regex(re);
+                TokenMatcher::Regex(re)
             }
         }
 
@@ -69,7 +69,7 @@ fn generate_def() -> proc_macro2::TokenStream {
                         TokenHandler::Pattern(t) => ::std::option::Option::Some(t.clone()),
                         TokenHandler::Regex(f)   => ::std::option::Option::Some(f(&input[..matched_size])),
                     };
-                    return ::std::option::Option::Some((token, &input[matched_size..]));
+                    ::std::option::Option::Some((token, &input[matched_size..]))
                 })?
             }
         }
@@ -106,10 +106,10 @@ fn generate_def() -> proc_macro2::TokenStream {
                         });
                     }
                 }
-                return ::std::result::Result::Ok(tokens);
+                ::std::result::Result::Ok(tokens)
             }
         }
-    };
+    }
 }
 
 fn generate_token_idents(
@@ -136,9 +136,9 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
         .filter_map(|info| generate_token_idents(info));
 
     let enum_entries = idents.clone().map(|(enum_entry, struct_ident, _)| {
-        return quote! {
+        quote! {
             #enum_entry(#struct_ident)
-        };
+        }
     });
 
     let structs = idents
@@ -157,14 +157,14 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
             }
         });
 
-    return quote! {
+    quote! {
         #(#structs)*
 
         #[derive(::std::fmt::Debug, ::std::clone::Clone)]
         pub enum Token {
             #(#enum_entries),*
         }
-    };
+    }
 }
 
 fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
@@ -173,12 +173,12 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
             let enum_ident = enum_ident(name);
             let struct_ident = struct_ident(name);
 
-            return quote! {
+            quote! {
                 LexRule {
                     matcher: TokenMatcher::Exact(#pattern.to_string()),
                     handler: TokenHandler::Pattern(Token::#enum_ident(#struct_ident))
                 }
-            };
+            }
         }
         TokenInfo::Regex(RegexToken {
             name,
@@ -190,7 +190,7 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
             let struct_ident = struct_ident(name);
             let fn_ident = base_ident(transformer_fn);
 
-            return quote! {
+            quote! {
                 LexRule {
                     matcher: TokenMatcher::regex(#regex),
                     handler: TokenHandler::Regex(
@@ -199,7 +199,7 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
                         )
                     )
                 }
-            };
+            }
         }
         TokenInfo::Ignore(IgnorePattern { regex }) => quote! {
             LexRule {
@@ -209,11 +209,11 @@ fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
         },
     });
 
-    return quote! {
+    quote! {
         impl Lexer {
             pub fn new() -> Lexer {
                 return Lexer { rules: ::std::vec![#(#rules),*] };
             }
         }
-    };
+    }
 }

@@ -30,13 +30,14 @@ impl Parse for NameValue {
         let name: proc_macro2::Ident = input.parse()?;
         let _eq: syn::Token![=] = input.parse()?;
         let value: syn::LitStr = input.parse()?;
-        return Ok(NameValue {
+
+        Ok(NameValue {
             name: Spanned {
                 content: name.to_string().into(),
                 span: name.span(),
             },
             value: value.value().into(),
-        });
+        })
     }
 }
 
@@ -61,13 +62,13 @@ impl Parse for AttributeList {
         type CommaSeparated = Punctuated<NameValue, syn::Token![,]>;
         let pairs = CommaSeparated::parse_terminated(&content_parenthesized)?;
 
-        return Ok(AttributeList {
+        Ok(AttributeList {
             attr: Spanned {
                 content: attr.to_string().into(),
                 span: attr.span(),
             },
             pairs: pairs.into_iter().collect(),
-        });
+        })
     }
 }
 #[derive(Debug)]
@@ -83,7 +84,7 @@ impl Parse for AttributeNameValue {
 
         let key_value: NameValue = content_bracketed.parse()?;
 
-        return Ok(AttributeNameValue(key_value));
+        Ok(AttributeNameValue(key_value))
     }
 }
 
@@ -135,13 +136,13 @@ pub fn fit_attribute_list(
         }
     }
 
-    return Ok(parsed_attribute.pairs.iter().fold(
+    Ok(parsed_attribute.pairs.iter().fold(
         HashMap::new(),
         |mut acc, NameValue { name, value }| {
             acc.insert(name.content.clone(), value.clone());
             acc
         },
-    ));
+    ))
 }
 
 //#[exact_token(name = "Minus", pattern = "-")]
@@ -154,7 +155,7 @@ pub fn parse_exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenI
     let name = attr.remove("name").unwrap();
     let pattern = attr.remove("pattern").unwrap();
 
-    return Ok(TokenInfo::Exact(ExactToken { name, pattern }));
+    Ok(TokenInfo::Exact(ExactToken { name, pattern }))
 }
 
 //#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64")]
@@ -171,12 +172,12 @@ pub fn parse_regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenI
     let transformer_fn = attr.remove("transformer_fn").unwrap();
     let kind = attr.remove("kind").unwrap();
 
-    return Ok(TokenInfo::Regex(RegexToken {
+    Ok(TokenInfo::Regex(RegexToken {
         name,
         regex,
         transformer_fn,
         kind,
-    }));
+    }))
 }
 
 //#[ignore_pattern(regex = r"\s+")]
@@ -187,7 +188,7 @@ pub fn parse_ignore_pattern(tokens: proc_macro2::TokenStream) -> syn::Result<Tok
     let mut attr = fit_attribute_list(tokens, "ignore_pattern", expected_properties)?;
     let regex = attr.remove("regex").unwrap();
 
-    return Ok(TokenInfo::Ignore(IgnorePattern { regex }));
+    Ok(TokenInfo::Ignore(IgnorePattern { regex }))
 }
 
 //#[grammar = "abc"]
@@ -198,5 +199,6 @@ pub fn parse_grammar_attribute(
     if &*name.content != "grammar" {
         return Err(syn::Error::new(name.span, "Wrong attribute"));
     }
-    return Ok((name.span, value));
+
+    Ok((name.span, value))
 }

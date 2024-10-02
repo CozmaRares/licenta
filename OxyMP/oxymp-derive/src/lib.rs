@@ -17,7 +17,7 @@ use syn::spanned::Spanned;
 use crate::tokens::TokenInfo;
 
 fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<Rc<str>, Vec<proc_macro2::TokenStream>> {
-    return attrs.iter().fold(HashMap::new(), |mut acc, attr| {
+    attrs.iter().fold(HashMap::new(), |mut acc, attr| {
         let attr_ident = attr
             .path()
             .segments
@@ -32,7 +32,7 @@ fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<Rc<str>, Vec<proc_macro2:
             .extend(vec![attr.to_token_stream()]);
 
         return acc;
-    });
+    })
 }
 
 fn parse_token_attrs(
@@ -55,7 +55,7 @@ fn parse_token_attrs(
         }
     }
 
-    return Ok(token_info);
+    Ok(token_info)
 }
 
 fn parse_grammar_attrs(
@@ -71,7 +71,7 @@ fn parse_grammar_attrs(
         }
     }
 
-    return Ok(rules);
+    Ok(rules)
 }
 
 fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
@@ -91,12 +91,10 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
 
     let lexer = lexer::generate_lexer(&token_info);
 
-    let output = quote! {
+    Ok(quote! {
         #lexer
         #parser
-    };
-
-    return Ok(output);
+    })
 }
 
 #[proc_macro_derive(
@@ -104,9 +102,9 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
     attributes(exact_token, regex_token, ignore_pattern, grammar)
 )]
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    return match derive_impl(input) {
+    match derive_impl(input) {
         Ok(o) => o,
         Err(e) => e.to_compile_error(),
     }
-    .into();
+    .into()
 }
