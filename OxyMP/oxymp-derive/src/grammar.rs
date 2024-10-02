@@ -5,7 +5,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, tag},
     character::complete::{alpha1, char, multispace0, none_of},
-    combinator::{eof, value},
+    combinator::{eof, opt, value},
     multi::{many1, separated_list1},
     sequence::delimited,
     IResult,
@@ -17,18 +17,18 @@ use crate::lexer::TokenInfo;
 enum RawGrammarNode {
     Name(Rc<str>),
     Pattern(Rc<str>),
-    Expr(Vec<RawGrammarNode>),
-    Choice(Vec<RawGrammarNode>),
+    List(Vec<RawGrammarNode>),
     Optional(Box<RawGrammarNode>),
+    Choice(Vec<RawGrammarNode>),
 }
 
 #[derive(Debug)]
 pub enum GrammarNodeContent {
     Rule(Rc<str>),
     Token(Rc<str>),
-    Expr(Vec<GrammarNode>),
-    Choice(Vec<GrammarNode>, usize),
+    List(Vec<GrammarNode>),
     Optional(Box<GrammarNode>),
+    Choice(Vec<GrammarNode>, usize),
 }
 
 #[derive(Debug)]
@@ -82,7 +82,7 @@ impl GrammarNode {
                     choice_idx,
                 ),
             },
-            RawGrammarNode::Expr(exprs) => {
+            RawGrammarNode::List(exprs) => {
                 if exprs.len() == 1 {
                     let mut exprs = exprs;
                     let expr = exprs.pop().unwrap();
@@ -105,7 +105,7 @@ impl GrammarNode {
 
                 (
                     GrammarNode {
-                        content: GrammarNodeContent::Expr(exprs),
+                        content: GrammarNodeContent::List(exprs),
                         index: node_idx,
                     },
                     node_idx + 1,
@@ -142,13 +142,13 @@ impl GrammarNode {
                     choice_idx + 1,
                 )
             }
-            RawGrammarNode::Optional(opt) => {
-                let (opt, node_idx, choice_idx) =
-                    GrammarNode::from_raw(*opt, names, patterns, node_idx, choice_idx);
+            RawGrammarNode::Optional(node) => {
+                let (node, node_idx, choice_idx) =
+                    GrammarNode::from_raw(*node, names, patterns, node_idx, choice_idx);
 
                 (
                     GrammarNode {
-                        content: GrammarNodeContent::Optional(Box::new(opt)),
+                        content: GrammarNodeContent::Optional(Box::new(node)),
                         index: node_idx,
                     },
                     node_idx + 1,
@@ -228,19 +228,10 @@ where
     delimited(multispace0, inner, multispace0)
 }
 
-fn paranthesized<'a, O, E: nom::error::ParseError<&'a str>, F>(
-    inner: F,
-) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
-where
-    F: nom::Parser<&'a str, O, E>,
-{
-    delimited(ws(char('(')), inner, ws(char(')')))
-}
-
 fn grammar_rule(input: &str) -> IResult<&str, RawGrammarRule> {
     let (input, name) = name(input)?;
-    let (input, _) = tag("->")(input)?;
-    let (input, rule) = expr(input)?;
+    let (input, _) = tag("::=")(input)?;
+    let (input, rule) = choice(input)?;
     let (input, _) = eof(input)?;
 
     let inner;
@@ -258,41 +249,38 @@ fn name(input: &str) -> IResult<&str, RawGrammarNode> {
     Ok((input, RawGrammarNode::Name(matched.into())))
 }
 
-fn expr(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, exprs) = many1(expr1)(input)?;
-    Ok((input, RawGrammarNode::Expr(exprs.into())))
+fn choice(input: &str) -> IResult<&str, RawGrammarNode> {
+    let (input, choices) = separated_list1(ws(char('|')), list)(input)?;
+    Ok((input, RawGrammarNode::Choice(choices.into())))
 }
 
-fn expr1(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, expr) = alt((optional, choice, literal))(input)?;
-    Ok((input, expr))
+fn list(input: &str) -> IResult<&str, RawGrammarNode> {
+    let (input, items) = many1(list_item)(input)?;
+    Ok((input, RawGrammarNode::List(items.into())))
 }
 
-fn literal(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, literal) = alt((token, name))(input)?;
-    Ok((input, literal))
+fn list_item(input: &str) -> IResult<&str, RawGrammarNode> {
+    let (input, node) = alt((group, token_pattern, name))(input)?;
+    let (input, modifier) = ws(opt(char('?')))(input)?;
+
+    match modifier {
+        None => Ok((input, node)),
+        Some('?') => Ok((input, RawGrammarNode::Optional(Box::new(node)))),
+        Some(_) => unreachable!(),
+    }
 }
 
-fn pattern(input: &str) -> IResult<&str, String> {
-    escaped_transform(
+fn group(input: &str) -> IResult<&str, RawGrammarNode> {
+    delimited(ws(char('(')), choice, ws(char(')')))(input)
+}
+
+fn token_pattern(input: &str) -> IResult<&str, RawGrammarNode> {
+    let base = escaped_transform(
         none_of(r"\'"),
         '\\',
         alt((value(r"\", tag(r"\")), value("'", tag("'")))),
-    )(input)
-}
+    );
 
-fn token(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, matched) = ws(delimited(char('\''), pattern, char('\'')))(input)?;
+    let (input, matched) = ws(delimited(char('\''), base, char('\'')))(input)?;
     Ok((input, RawGrammarNode::Pattern(matched.into())))
-}
-
-fn optional(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, opt) = paranthesized(expr)(input)?;
-    let (input, _) = ws(char('?'))(input)?;
-    Ok((input, RawGrammarNode::Optional(Box::new(opt))))
-}
-
-fn choice(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, choices) = paranthesized(separated_list1(char('|'), expr))(input)?;
-    Ok((input, RawGrammarNode::Choice(choices.into())))
 }

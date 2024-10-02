@@ -122,7 +122,7 @@ fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
                 external_choices: None,
             }
         }
-        GrammarNodeContent::Expr(exprs) => {
+        GrammarNodeContent::List(exprs) => {
             let defs = exprs.iter().map(|expr| generate_ast_node(rule, expr));
             let main_struct = defs.clone().map(|d| d.main_struct);
             let external_choices = defs.filter_map(|d| d.external_choices).flatten();
@@ -186,11 +186,7 @@ fn generate_impl(
     }
 }
 
-fn generate_rule(
-    parser_ident: &proc_macro2::Ident,
-    rule: &str,
-    node: &GrammarNode,
-) -> TokenStream {
+fn generate_rule(parser_ident: &proc_macro2::Ident, rule: &str, node: &GrammarNode) -> TokenStream {
     let rule_ident = parser::rule_ident(rule);
     let defs = generate_rule_def(parser_ident, rule, node);
     let toks = defs.0;
@@ -241,7 +237,7 @@ fn generate_rule_def(
                 }?;
             }
         }
-        GrammarNodeContent::Expr(exprs) => {
+        GrammarNodeContent::List(exprs) => {
             let defs = exprs
                 .iter()
                 .map(|expr| generate_rule_def(parser_ident, rule, expr));
