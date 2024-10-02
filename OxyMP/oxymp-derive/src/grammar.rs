@@ -11,7 +11,7 @@ use nom::{
     IResult,
 };
 
-use crate::lexer::TokenInfo;
+use crate::tokens::TokenInfo;
 
 #[derive(Debug)]
 enum RawGrammarNode {
@@ -208,7 +208,7 @@ pub fn aggragate_grammar_rules(
             add_token_pattern(tok.pattern.clone(), tok.name.clone())
         }
         TokenInfo::Regex(tok) => add_token_name(tok.name.clone()),
-        _ => {}
+        TokenInfo::Ignore(_) => {}
     });
 
     rules

@@ -1,115 +1,9 @@
-use std::{collections::HashSet, rc::Rc};
-
 use quote::quote;
 
 use crate::{
-    attribute::AttributeList,
     idents::{base_ident, tokens::*},
+    tokens::*,
 };
-
-#[derive(Debug)]
-pub struct ExactToken {
-    pub name: Rc<str>,
-    pub pattern: Rc<str>,
-}
-
-#[derive(Debug)]
-pub struct RegexToken {
-    pub name: Rc<str>,
-    pub regex: Rc<str>,
-    pub transformer_fn: Rc<str>,
-    pub kind: Rc<str>,
-}
-
-#[derive(Debug)]
-pub struct IgnorePattern {
-    pub regex: Rc<str>,
-}
-
-#[derive(Debug)]
-pub enum TokenInfo {
-    Exact(ExactToken),
-    Regex(RegexToken),
-    Ignore(IgnorePattern),
-}
-
-impl TokenInfo {
-    fn generate_idents(
-        &self,
-    ) -> Option<(
-        proc_macro2::Ident,
-        proc_macro2::Ident,
-        Option<proc_macro2::Ident>,
-    )> {
-        match self {
-            TokenInfo::Exact(ExactToken { name, .. }) => {
-                Some((enum_ident(name), struct_ident(name), None))
-            }
-            TokenInfo::Regex(RegexToken { name, kind, .. }) => {
-                Some((enum_ident(name), struct_ident(name), Some(base_ident(kind))))
-            }
-            _ => None,
-        }
-    }
-}
-
-impl TokenInfo {
-    //#[exact_token(name = "Minus", pattern = "-")]
-    pub fn exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
-        let mut expected_properties = HashSet::new();
-        expected_properties.insert("name");
-        expected_properties.insert("pattern");
-
-        let map = AttributeList::prepare_token_info(
-            tokens,
-            "exact_token",
-            expected_properties,
-        )?;
-
-        return Ok(TokenInfo::Exact(ExactToken {
-            name: map.get("name").unwrap().clone(),
-            pattern: map.get("pattern").unwrap().clone(),
-        }));
-    }
-
-    //#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64")]
-    pub fn regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
-        let mut expected_properties = HashSet::new();
-        expected_properties.insert("name");
-        expected_properties.insert("regex");
-        expected_properties.insert("transformer_fn");
-        expected_properties.insert("kind");
-
-        let map = AttributeList::prepare_token_info(
-            tokens,
-            "regex_token",
-            expected_properties,
-        )?;
-
-        return Ok(TokenInfo::Regex(RegexToken {
-            name: map.get("name").unwrap().clone(),
-            regex: map.get("regex").unwrap().clone(),
-            transformer_fn: map.get("transformer_fn").unwrap().clone(),
-            kind: map.get("kind").unwrap().clone(),
-        }));
-    }
-
-    //#[ignore_pattern(regex = r"\s+")]
-    pub fn ignore_pattern(tokens: proc_macro2::TokenStream) -> syn::Result<Self> {
-        let mut expected_properties = HashSet::new();
-        expected_properties.insert("regex");
-
-        let map = AttributeList::prepare_token_info(
-            tokens,
-            "ignore_pattern",
-            expected_properties,
-        )?;
-
-        return Ok(TokenInfo::Ignore(IgnorePattern {
-            regex: map.get("regex").unwrap().clone(),
-        }));
-    }
-}
 
 pub fn generate_lexer(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let lexer_def = generate_def();
@@ -218,12 +112,28 @@ fn generate_def() -> proc_macro2::TokenStream {
     };
 }
 
+fn generate_token_idents(
+    token: &TokenInfo,
+) -> Option<(
+    proc_macro2::Ident,
+    proc_macro2::Ident,
+    Option<proc_macro2::Ident>,
+)> {
+    match token {
+        TokenInfo::Exact(ExactToken { name, .. }) => {
+            Some((enum_ident(name), struct_ident(name), None))
+        }
+        TokenInfo::Regex(RegexToken { name, kind, .. }) => {
+            Some((enum_ident(name), struct_ident(name), Some(base_ident(kind))))
+        }
+        TokenInfo::Ignore(_) => None,
+    }
+}
+
 fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let idents = token_info
         .iter()
-        .map(|info| info.generate_idents())
-        .filter(|opt| opt.is_some())
-        .map(|idents| idents.unwrap());
+        .filter_map(|info| generate_token_idents(info));
 
     let enum_entries = idents.clone().map(|(enum_entry, struct_ident, _)| {
         return quote! {
