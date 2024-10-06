@@ -8,6 +8,10 @@ use crate::idents::base_ident;
 #[derive(PartialEq, Eq, Hash)]
 pub enum Symbol {
     CoreStr,
+    CoreUsize,
+
+    DeriveDebug,
+    DeriveClone,
 
     Result,
     Ok,
@@ -18,6 +22,13 @@ pub enum Symbol {
     Some,
 
     String,
+    Fn,
+    Box,
+    Vec,
+    Rc,
+
+    FormatMacro,
+    VecMacro,
 
     Regex,
 }
@@ -35,21 +46,33 @@ impl From<(&[&'static str], &'static str)> for Definition {
     }
 }
 
+#[rustfmt::skip]
 lazy_static! {
     static ref STD_LIB: HashMap<Symbol, Definition> = {
         let mut m = HashMap::new();
 
-        m.insert(Symbol::CoreStr, (&["core", "primitive"][..], "str").into());
+        m.insert(Symbol::CoreStr,   (&["core", "primitive"][..], "str"  ).into());
+        m.insert(Symbol::CoreUsize, (&["core", "primitive"][..], "usize").into());
 
-        m.insert(Symbol::Result, (&["std", "result"][..], "Result").into());
-        m.insert(Symbol::Ok, (&["std", "result"][..], "Ok").into());
-        m.insert(Symbol::Err, (&["std", "result"][..], "Err").into());
+        m.insert(Symbol::DeriveDebug, (&["std", "fmt"  ][..], "Debug").into());
+        m.insert(Symbol::DeriveClone, (&["std", "clone"][..], "Clone").into());
 
-        m.insert(Symbol::Option, (&["std", "option"][..], "Option").into());
-        m.insert(Symbol::None, (&["std", "option"][..], "None").into());
-        m.insert(Symbol::Some, (&["std", "option"][..], "Some").into());
+        m.insert(Symbol::Result, (&["std", "result"          ][..], "Result").into());
+        m.insert(Symbol::Ok,     (&["std", "result", "Result"][..], "Ok"    ).into());
+        m.insert(Symbol::Err,    (&["std", "result", "Result"][..], "Err"   ).into());
+
+        m.insert(Symbol::Option, (&["std", "option"          ][..], "Option").into());
+        m.insert(Symbol::None,   (&["std", "option", "Option"][..], "None"  ).into());
+        m.insert(Symbol::Some,   (&["std", "option", "Option"][..], "Some"  ).into());
 
         m.insert(Symbol::String, (&["std", "string"][..], "String").into());
+        m.insert(Symbol::Fn,     (&["std", "ops"   ][..], "Fn"    ).into());
+        m.insert(Symbol::Box,    (&["std", "boxed" ][..], "Box"   ).into());
+        m.insert(Symbol::Vec,    (&["std", "vec"   ][..], "Vec"   ).into());
+        m.insert(Symbol::Rc,     (&["std", "rc"    ][..], "Rc"    ).into());
+
+        m.insert(Symbol::FormatMacro, (&["std", "format"][..], "format").into());
+        m.insert(Symbol::VecMacro,    (&["std"          ][..], "vec")    .into());
 
         m.insert(Symbol::Regex, (&["regex"][..], "Regex").into());
 
