@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
@@ -20,7 +22,6 @@ pub fn generate_lexer(data: &MacroData) -> TokenStream {
     }
 }
 
-#[allow(non_snake_case)]
 fn generate_static_defs(data: &MacroData) -> TokenStream {
     let visibility = &data.visibility;
 
@@ -151,7 +152,6 @@ fn generate_token_idents(token: &TokenInfo) -> Option<(Ident, Ident, Option<Iden
     }
 }
 
-#[allow(non_snake_case)]
 fn generate_tokens(data: &MacroData) -> TokenStream {
     let visibility = &data.visibility;
     let token_info = &data.tokens;
@@ -196,7 +196,6 @@ fn generate_tokens(data: &MacroData) -> TokenStream {
     }
 }
 
-#[allow(non_snake_case)]
 fn generate_constructor(data: &MacroData) -> TokenStream {
     let visibility = &data.visibility;
     let token_info = &data.tokens;

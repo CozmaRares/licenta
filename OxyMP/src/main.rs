@@ -1,7 +1,7 @@
-use regex::Regex;
 use oxymp::RecursiveDescent;
+use regex::Regex;
 
-use std::rc::Rc;
+use std::{ops::Deref, rc::Rc};
 
 fn match_number(matched: &str) -> i64 {
     matched.parse().unwrap()

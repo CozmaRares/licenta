@@ -22,10 +22,12 @@ pub enum Symbol {
     Some,
 
     String,
-    Fn,
     Box,
     Vec,
     Rc,
+
+    Fn,
+    Deref,
 
     FormatMacro,
     VecMacro,
@@ -66,10 +68,12 @@ lazy_static! {
         m.insert(Symbol::Some,   (&["std", "option", "Option"][..], "Some"  ).into());
 
         m.insert(Symbol::String, (&["std", "string"][..], "String").into());
-        m.insert(Symbol::Fn,     (&["std", "ops"   ][..], "Fn"    ).into());
         m.insert(Symbol::Box,    (&["std", "boxed" ][..], "Box"   ).into());
         m.insert(Symbol::Vec,    (&["std", "vec"   ][..], "Vec"   ).into());
         m.insert(Symbol::Rc,     (&["std", "rc"    ][..], "Rc"    ).into());
+
+        m.insert(Symbol::Fn,    (&["std", "ops"][..], "Fn"    ).into());
+        m.insert(Symbol::Deref, (&["std", "ops"][..], "Deref" ).into());
 
         m.insert(Symbol::FormatMacro, (&["std", "format"][..], "format").into());
         m.insert(Symbol::VecMacro,    (&["std"          ][..], "vec")    .into());
