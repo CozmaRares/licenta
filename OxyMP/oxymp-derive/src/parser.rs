@@ -1,6 +1,11 @@
 #![allow(non_snake_case)]
 
-use std::{collections::{HashMap, HashSet}, rc::Rc};
+use core::panic;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -337,29 +342,41 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
     (toks, node_ident)
 }
 
-// TODO: add a cache
-fn first(node: &GrammarNode, depth: usize) -> Option<HashSet<Rc<str>>> {
-    if depth == 0 {
-        return None;
+thread_local! {
+    static CACHE: RefCell<HashMap<*const GrammarNode, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
+}
+
+fn first(node: &GrammarNode, depth: usize) -> Rc<HashSet<Rc<str>>> {
+    if let Some(cached) = CACHE.with(|c| c.borrow().get(&(node as *const GrammarNode)).cloned()) {
+        return cached;
     }
 
-    match &node.content {
-        GrammarNodeContent::Rule(rule) => Some(HashSet::from([rule.clone()])),
-        GrammarNodeContent::Token(token) => Some(HashSet::from([token.clone()])),
-        GrammarNodeContent::List(list) => first(list.first()?, depth - 1),
+    if depth == 0 {
+        panic!("Depth limit reached");
+    }
+
+    let computed = match &node.content {
+        GrammarNodeContent::Rule(rule) => pipe!([rule.clone()] => HashSet::from => Rc::new),
+        GrammarNodeContent::Token(token) => {
+            pipe!([token.clone()] => HashSet::from => Rc::new)
+        }
+        GrammarNodeContent::List(list) => first(list.first().unwrap(), depth - 1),
         GrammarNodeContent::Optional(opt) => first(opt, depth - 1),
         GrammarNodeContent::Choice(choices, _) => {
             let firsts: HashSet<_> = choices
                 .iter()
-                .filter_map(|choice| first(choice, depth - 1))
+                .map(|choice| first(choice, depth - 1))
+                .map(|choice| choice.iter().cloned().collect::<Vec<_>>())
                 .flatten()
                 .collect();
 
-            if firsts.is_empty() {
-                None
-            } else {
-                Some(firsts)
-            }
+            pipe!(firsts => Rc::new)
         }
-    }
+    };
+
+    CACHE.with(|c| {
+        c.borrow_mut()
+            .insert(node as *const GrammarNode, computed.clone())
+    });
+    computed
 }
