@@ -1,4 +1,5 @@
 mod attribute;
+mod data;
 mod grammar;
 mod idents;
 mod lexer;
@@ -10,6 +11,7 @@ use std::{collections::HashMap, rc::Rc};
 use attribute::{
     parse_exact_token, parse_grammar_attribute, parse_ignore_pattern, parse_regex_token,
 };
+use data::MacroData;
 use grammar::{aggragate_grammar_rules, new_grammar_rule, RawGrammarRule};
 use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
@@ -84,12 +86,17 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
     };
 
     let token_info = parse_token_attrs(attr_groups)?;
+
+    let data = MacroData {
+        tokens: token_info,
+        parser_ident: ast.ident,
+    };
+
     let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
+    let grammar_rules = aggragate_grammar_rules(grammar_rules, &data);
 
-    let grammar_rules = aggragate_grammar_rules(grammar_rules, &token_info);
-    let parser = parser::generate_parser(&ast.ident, &grammar_rules);
-
-    let lexer = lexer::generate_lexer(&token_info);
+    let parser = parser::generate_parser(&data, &grammar_rules);
+    let lexer = lexer::generate_lexer(&data);
 
     Ok(quote! {
         #lexer

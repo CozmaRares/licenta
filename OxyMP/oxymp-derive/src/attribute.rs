@@ -136,13 +136,13 @@ pub fn fit_attribute_list(
         }
     }
 
-    Ok(parsed_attribute.pairs.iter().fold(
-        HashMap::new(),
-        |mut acc, NameValue { name, value }| {
+    Ok(parsed_attribute
+        .pairs
+        .iter()
+        .fold(HashMap::new(), |mut acc, NameValue { name, value }| {
             acc.insert(name.content.clone(), value.clone());
             acc
-        },
-    ))
+        }))
 }
 
 //#[exact_token(name = "Minus", pattern = "-")]

@@ -4,17 +4,15 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::{
+    data::MacroData,
     grammar::{GrammarNode, GrammarNodeContent},
     idents::{parser, tokens},
 };
 
-pub fn generate_parser(
-    parser_ident: &proc_macro2::Ident,
-    rules: &HashMap<Rc<str>, GrammarNode>,
-) -> TokenStream {
+pub fn generate_parser(data: &MacroData, rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
     let defs = generate_static_defs();
     let ast = generate_ast(rules);
-    let parser_impl = generate_impl(parser_ident, rules);
+    let parser_impl = generate_impl(&data.parser_ident, rules);
 
     quote! {
         #defs

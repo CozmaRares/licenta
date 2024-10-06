@@ -11,7 +11,7 @@ use nom::{
     IResult,
 };
 
-use crate::tokens::TokenInfo;
+use crate::{data::MacroData, tokens::TokenInfo};
 
 #[derive(Debug)]
 enum RawGrammarNode {
@@ -171,7 +171,7 @@ pub fn new_grammar_rule(rule: &str) -> Result<RawGrammarRule, nom::Err<nom::erro
 
 pub fn aggragate_grammar_rules(
     rules: Vec<RawGrammarRule>,
-    token_info: &Vec<TokenInfo>,
+    data: &MacroData,
 ) -> HashMap<Rc<str>, GrammarNode> {
     let mut names = HashMap::new();
     let mut patterns = HashMap::new();
@@ -202,7 +202,7 @@ pub fn aggragate_grammar_rules(
         patterns.insert(tok_pattern, tok_name);
     };
 
-    token_info.iter().for_each(|info| match info {
+    data.tokens.iter().for_each(|info| match info {
         TokenInfo::Exact(tok) => {
             add_token_name(tok.name.clone());
             add_token_pattern(tok.pattern.clone(), tok.name.clone())

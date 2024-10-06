@@ -1,14 +1,15 @@
 use quote::quote;
 
 use crate::{
+    data::MacroData,
     idents::{base_ident, tokens::*},
     tokens::*,
 };
 
-pub fn generate_lexer(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+pub fn generate_lexer(data: &MacroData) -> proc_macro2::TokenStream {
     let defs = generate_static_defs();
-    let tokens = generate_tokens(&token_info);
-    let constructor = generate_constructor(&token_info);
+    let tokens = generate_tokens(&data.tokens);
+    let constructor = generate_constructor(&data.tokens);
 
     quote! {
         #defs
