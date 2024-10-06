@@ -84,6 +84,7 @@ lazy_static! {
     };
 }
 
+// TODO: add a cache
 pub fn get_def(symbol: Symbol, simple: bool) -> proc_macro2::TokenStream {
     let def = STD_LIB.get(&symbol).unwrap();
     let base = base_ident(def.base);

@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::{HashMap, HashSet}, rc::Rc};
 
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
@@ -8,7 +8,8 @@ use quote::quote;
 use crate::{
     data::MacroData,
     grammar::{GrammarNode, GrammarNodeContent},
-    idents::{parser, tokens}, symbols::{get_def, Symbol},
+    idents::{parser, tokens},
+    symbols::{get_def, Symbol},
 };
 
 pub fn generate_parser(data: &MacroData, rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
@@ -193,10 +194,7 @@ fn generate_ast_node(rule: &str, node: &GrammarNode, data: &MacroData) -> ASTNod
     }
 }
 
-fn generate_impl(
-    rules: &HashMap<Rc<str>, GrammarNode>,
-    data: &MacroData,
-) -> TokenStream {
+fn generate_impl(rules: &HashMap<Rc<str>, GrammarNode>, data: &MacroData) -> TokenStream {
     let parser_ident = &data.parser_ident;
 
     let methods = rules
@@ -211,11 +209,7 @@ fn generate_impl(
 }
 
 #[allow(non_snake_case)]
-fn generate_rule(
-    rule: &str,
-    node: &GrammarNode,
-    data: &MacroData,
-) -> TokenStream {
+fn generate_rule(rule: &str, node: &GrammarNode, data: &MacroData) -> TokenStream {
     let visibility = &data.visibility;
 
     let rule_ident = parser::rule_ident(rule);
@@ -274,9 +268,7 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
             }
         }
         GrammarNodeContent::List(exprs) => {
-            let defs = exprs
-                .iter()
-                .map(|expr| expand_node(rule, expr, data));
+            let defs = exprs.iter().map(|expr| expand_node(rule, expr, data));
             let toks = defs.clone().map(|d| d.0);
             let idents = defs.map(|d| d.1);
 
@@ -343,4 +335,31 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
     };
 
     (toks, node_ident)
+}
+
+// TODO: add a cache
+fn first(node: &GrammarNode, depth: usize) -> Option<HashSet<Rc<str>>> {
+    if depth == 0 {
+        return None;
+    }
+
+    match &node.content {
+        GrammarNodeContent::Rule(rule) => Some(HashSet::from([rule.clone()])),
+        GrammarNodeContent::Token(token) => Some(HashSet::from([token.clone()])),
+        GrammarNodeContent::List(list) => first(list.first()?, depth - 1),
+        GrammarNodeContent::Optional(opt) => first(opt, depth - 1),
+        GrammarNodeContent::Choice(choices, _) => {
+            let firsts: HashSet<_> = choices
+                .iter()
+                .filter_map(|choice| first(choice, depth - 1))
+                .flatten()
+                .collect();
+
+            if firsts.is_empty() {
+                None
+            } else {
+                Some(firsts)
+            }
+        }
+    }
 }
