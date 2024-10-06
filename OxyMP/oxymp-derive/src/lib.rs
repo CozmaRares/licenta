@@ -84,6 +84,19 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         Some(v) => v,
         None => return Err(syn::Error::new(ast.span(), "Missing grammar rules.")),
     };
+    let simple_types = match attr_groups.remove("simple_types") {
+        Some(v) => match v.len() {
+            0 => false,
+            1 => true,
+            _ => {
+                return Err(syn::Error::new(
+                    ast.span(),
+                    "Multiple '#[simple_types]' attributes.",
+                ))
+            }
+        },
+        None => false,
+    };
 
     let token_info = parse_token_attrs(attr_groups)?;
 
@@ -94,6 +107,7 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         tokens: token_info,
         parser_ident: ast.ident,
         visibility: vis_toks,
+        simple_types,
     };
 
     let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
@@ -110,7 +124,7 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
 
 #[proc_macro_derive(
     RecursiveDescent,
-    attributes(exact_token, regex_token, ignore_pattern, grammar)
+    attributes(exact_token, regex_token, ignore_pattern, grammar, simple_types)
 )]
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match derive_impl(input) {
