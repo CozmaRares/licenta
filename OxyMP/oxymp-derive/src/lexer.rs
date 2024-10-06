@@ -6,18 +6,18 @@ use crate::{
 };
 
 pub fn generate_lexer(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
-    let lexer_def = generate_def();
-    let token_def = generate_tokens(&token_info);
-    let lex_rules = generate_rules(&token_info);
+    let defs = generate_static_defs();
+    let tokens = generate_tokens(&token_info);
+    let constructor = generate_constructor(&token_info);
 
     quote! {
-        #lexer_def
-        #token_def
-        #lex_rules
+        #defs
+        #tokens
+        #constructor
     }
 }
 
-fn generate_def() -> proc_macro2::TokenStream {
+fn generate_static_defs() -> proc_macro2::TokenStream {
     quote! {
         enum TokenMatcher {
             Exact(::std::string::String),
@@ -167,7 +167,7 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     }
 }
 
-fn generate_rules(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+fn generate_constructor(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let rules = token_info.iter().map(|tok| match tok {
         TokenInfo::Exact(ExactToken { name, pattern }) => {
             let enum_ident = enum_ident(name);
