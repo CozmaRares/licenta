@@ -12,18 +12,18 @@ pub fn generate_parser(
     parser_ident: &proc_macro2::Ident,
     rules: &HashMap<Rc<str>, GrammarNode>,
 ) -> TokenStream {
-    let parser_def = generate_def();
+    let defs = generate_static_defs();
     let ast = generate_ast(rules);
     let parser_impl = generate_impl(parser_ident, rules);
 
     quote! {
-        #parser_def
+        #defs
         #ast
         #parser_impl
     }
 }
 
-fn generate_def() -> TokenStream {
+fn generate_static_defs() -> TokenStream {
     quote! {
         #[derive(::std::fmt::Debug, ::std::clone::Clone)]
         pub struct ParserInput {
@@ -188,7 +188,7 @@ fn generate_impl(
 
 fn generate_rule(parser_ident: &proc_macro2::Ident, rule: &str, node: &GrammarNode) -> TokenStream {
     let rule_ident = parser::rule_ident(rule);
-    let defs = generate_rule_def(parser_ident, rule, node);
+    let defs = expand_node(parser_ident, rule, node);
     let toks = defs.0;
     let ident = defs.1;
 
@@ -203,7 +203,7 @@ fn generate_rule(parser_ident: &proc_macro2::Ident, rule: &str, node: &GrammarNo
     }
 }
 
-fn generate_rule_def(
+fn expand_node(
     parser_ident: &proc_macro2::Ident,
     rule: &str,
     node: &GrammarNode,
@@ -240,7 +240,7 @@ fn generate_rule_def(
         GrammarNodeContent::List(exprs) => {
             let defs = exprs
                 .iter()
-                .map(|expr| generate_rule_def(parser_ident, rule, expr));
+                .map(|expr| expand_node(parser_ident, rule, expr));
             let toks = defs.clone().map(|d| d.0);
             let idents = defs.map(|d| d.1);
 
@@ -258,7 +258,7 @@ fn generate_rule_def(
         GrammarNodeContent::Choice(choices, choice_idx) => {
             let defs = choices
                 .iter()
-                .map(|expr| generate_rule_def(parser_ident, rule, expr))
+                .map(|expr| expand_node(parser_ident, rule, expr))
                 .enumerate()
                 .map(|(idx, (toks, ident))| {
                     let idx_ident = parser::idx_ident(idx + 1);
@@ -290,7 +290,7 @@ fn generate_rule_def(
             }
         }
         GrammarNodeContent::Optional(opt) => {
-            let (toks, ident) = generate_rule_def(parser_ident, rule, opt);
+            let (toks, ident) = expand_node(parser_ident, rule, opt);
 
             quote! {
                 let res: ParserState<_> = (|| {
