@@ -17,7 +17,7 @@ fn match_number(matched: &str) -> i64 {
 )]
 #[ignore_pattern(regex = r"\s+")]
 #[grammar = r"expr ::= Number (('+' | '-') expr)?"]
-struct Parser;
+pub(crate) struct Parser;
 
 impl expr {
     fn eval(self) -> i64 {

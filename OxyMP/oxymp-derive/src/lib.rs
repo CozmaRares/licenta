@@ -87,9 +87,13 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
 
     let token_info = parse_token_attrs(attr_groups)?;
 
+    let mut vis_toks = proc_macro2::TokenStream::new();
+    ast.vis.to_tokens(&mut vis_toks);
+
     let data = MacroData {
         tokens: token_info,
         parser_ident: ast.ident,
+        visibility: vis_toks,
     };
 
     let grammar_rules = parse_grammar_attrs(grammar_attrs)?;

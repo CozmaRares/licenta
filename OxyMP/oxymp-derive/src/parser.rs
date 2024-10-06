@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
 use crate::{
@@ -10,9 +10,9 @@ use crate::{
 };
 
 pub fn generate_parser(data: &MacroData, rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
-    let defs = generate_static_defs();
-    let ast = generate_ast(rules);
-    let parser_impl = generate_impl(&data.parser_ident, rules);
+    let defs = generate_static_defs(&data.visibility);
+    let ast = generate_ast(rules, &data.visibility);
+    let parser_impl = generate_impl(&data.parser_ident, rules, &data.visibility);
 
     quote! {
         #defs
@@ -21,12 +21,12 @@ pub fn generate_parser(data: &MacroData, rules: &HashMap<Rc<str>, GrammarNode>) 
     }
 }
 
-fn generate_static_defs() -> TokenStream {
+fn generate_static_defs(visibility: &TokenStream) -> TokenStream {
     quote! {
         #[derive(::std::fmt::Debug, ::std::clone::Clone)]
-        pub struct ParserInput {
-            tokens: ::std::rc::Rc<[Token]>,
-            current: ::core::primitive::usize,
+        #visibility struct ParserInput {
+           #visibility tokens: ::std::rc::Rc<[Token]>,
+           #visibility current: ::core::primitive::usize,
         }
         impl<T> From<T> for ParserInput
         where
@@ -40,34 +40,33 @@ fn generate_static_defs() -> TokenStream {
             }
         }
         impl ParserInput {
-            pub fn get_current(&self) -> ::std::option::Option<&Token> {
+            #visibility fn get_current(&self) -> ::std::option::Option<&Token> {
                 self.tokens.get(self.current)
             }
 
-            pub fn increment(&self) -> ParserInput {
+            #visibility fn increment(&self) -> ParserInput {
                 ParserInput {
                     tokens: self.tokens.clone(),
                     current: self.current + 1,
                 }
             }
         }
-        type ParserState<T> = ::std::result::Result<(ParserInput, T), ParseError>;
+        #visibility type ParserState<T> = ::std::result::Result<(ParserInput, T), ParseError>;
 
         #[derive(::std::fmt::Debug)]
-        pub struct ParseError {
-            pub place: ::std::string::String,
-            pub reason: ::std::string::String,
+        #visibility struct ParseError {
+            #visibility place: ::std::string::String,
+            #visibility reason: ::std::string::String,
         }
-
     }
 }
 
-fn generate_ast(rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
+fn generate_ast(rules: &HashMap<Rc<str>, GrammarNode>, visibility: &TokenStream) -> TokenStream {
     let structs = rules.iter().map(|(rule, node)| {
         let ASTNode {
             main_struct,
             external_choices,
-        } = generate_ast_node(rule, node);
+        } = generate_ast_node(rule, node, visibility);
 
         let external_choices = match external_choices {
             None => quote! {},
@@ -79,7 +78,7 @@ fn generate_ast(rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
         quote! {
             #external_choices
             #[derive(::std::fmt::Debug)]
-            pub struct #rule_ident (
+            #visibility struct #rule_ident (
                 #main_struct
             );
         }
@@ -93,7 +92,7 @@ fn generate_ast(rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
     quote! {
         #(#structs)*
         #[derive(::std::fmt::Debug)]
-        enum AST {
+        #visibility enum AST {
             #(#enum_entries),*
         }
     }
@@ -104,7 +103,7 @@ struct ASTNode {
     external_choices: Option<Vec<TokenStream>>,
 }
 
-fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
+fn generate_ast_node(rule: &str, node: &GrammarNode, visibility: &TokenStream) -> ASTNode {
     match &node.content {
         GrammarNodeContent::Rule(rule) => {
             let ident = parser::rule_ident(rule);
@@ -121,7 +120,9 @@ fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
             }
         }
         GrammarNodeContent::List(exprs) => {
-            let defs = exprs.iter().map(|expr| generate_ast_node(rule, expr));
+            let defs = exprs
+                .iter()
+                .map(|expr| generate_ast_node(rule, expr, visibility));
             let main_struct = defs.clone().map(|d| d.main_struct);
             let external_choices = defs.filter_map(|d| d.external_choices).flatten();
 
@@ -131,7 +132,9 @@ fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
             }
         }
         GrammarNodeContent::Choice(choices, choice_idx) => {
-            let defs = choices.iter().map(|choice| generate_ast_node(rule, choice));
+            let defs = choices
+                .iter()
+                .map(|choice| generate_ast_node(rule, choice, visibility));
             let enum_entries = defs
                 .clone()
                 .map(|d| d.main_struct)
@@ -148,7 +151,7 @@ fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
             let enum_ident = parser::choice_ident(rule, *choice_idx);
             external_choices.push(quote! {
                 #[derive(::std::fmt::Debug)]
-                enum #enum_ident {
+                #visibility enum #enum_ident {
                     #(#enum_entries),*
                 }
             });
@@ -159,7 +162,7 @@ fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
             }
         }
         GrammarNodeContent::Optional(opt) => {
-            let generated = generate_ast_node(rule, opt);
+            let generated = generate_ast_node(rule, opt, visibility);
             let main_struct = generated.main_struct;
             ASTNode {
                 main_struct: quote! { ::std::option::Option<#main_struct> },
@@ -170,12 +173,13 @@ fn generate_ast_node(rule: &str, node: &GrammarNode) -> ASTNode {
 }
 
 fn generate_impl(
-    parser_ident: &proc_macro2::Ident,
+    parser_ident: &Ident,
     rules: &HashMap<Rc<str>, GrammarNode>,
+    visibility: &TokenStream,
 ) -> TokenStream {
     let methods = rules
         .iter()
-        .map(|(rule, node)| generate_rule(parser_ident, rule, node));
+        .map(|(rule, node)| generate_rule(parser_ident, rule, node, visibility));
 
     quote! {
         impl #parser_ident {
@@ -184,14 +188,19 @@ fn generate_impl(
     }
 }
 
-fn generate_rule(parser_ident: &proc_macro2::Ident, rule: &str, node: &GrammarNode) -> TokenStream {
+fn generate_rule(
+    parser_ident: &Ident,
+    rule: &str,
+    node: &GrammarNode,
+    visibility: &TokenStream,
+) -> TokenStream {
     let rule_ident = parser::rule_ident(rule);
     let defs = expand_node(parser_ident, rule, node);
     let toks = defs.0;
     let ident = defs.1;
 
     quote! {
-        fn #rule_ident(inp: ParserInput) -> ParserState<#rule_ident> {
+        #visibility fn #rule_ident(inp: ParserInput) -> ParserState<#rule_ident> {
             #toks
             ::std::result::Result::Ok((
                 inp,
@@ -201,11 +210,7 @@ fn generate_rule(parser_ident: &proc_macro2::Ident, rule: &str, node: &GrammarNo
     }
 }
 
-fn expand_node(
-    parser_ident: &proc_macro2::Ident,
-    rule: &str,
-    node: &GrammarNode,
-) -> (TokenStream, proc_macro2::Ident) {
+fn expand_node(parser_ident: &Ident, rule: &str, node: &GrammarNode) -> (TokenStream, Ident) {
     let node_ident = parser::idx_ident(node.index);
 
     let toks = match &node.content {

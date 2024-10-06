@@ -1,3 +1,4 @@
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
 use crate::{
@@ -6,10 +7,10 @@ use crate::{
     tokens::*,
 };
 
-pub fn generate_lexer(data: &MacroData) -> proc_macro2::TokenStream {
-    let defs = generate_static_defs();
-    let tokens = generate_tokens(&data.tokens);
-    let constructor = generate_constructor(&data.tokens);
+pub fn generate_lexer(data: &MacroData) -> TokenStream {
+    let defs = generate_static_defs(&data.visibility);
+    let tokens = generate_tokens(&data.tokens, &data.visibility);
+    let constructor = generate_constructor(&data.tokens, &data.visibility);
 
     quote! {
         #defs
@@ -18,7 +19,7 @@ pub fn generate_lexer(data: &MacroData) -> proc_macro2::TokenStream {
     }
 }
 
-fn generate_static_defs() -> proc_macro2::TokenStream {
+fn generate_static_defs(visibility: &TokenStream) -> TokenStream {
     quote! {
         enum TokenMatcher {
             Exact(::std::string::String),
@@ -76,17 +77,17 @@ fn generate_static_defs() -> proc_macro2::TokenStream {
         }
 
         #[derive(::std::fmt::Debug)]
-        pub struct LexError<'a> {
-            pub input:   &'a ::core::primitive::str,
-            pub message: ::std::string::String,
+        #visibility struct LexError<'a> {
+            #visibility input:   &'a ::core::primitive::str,
+            #visibility message: ::std::string::String,
         }
 
-        pub struct Lexer {
+        #visibility struct Lexer {
             rules: ::std::vec::Vec<LexRule>,
         }
 
         impl Lexer {
-            pub fn tokenize(self, mut input: &::core::primitive::str) -> ::std::result::Result<::std::vec::Vec<Token>, LexError> {
+            #visibility fn tokenize(self, mut input: &::core::primitive::str) -> ::std::result::Result<::std::vec::Vec<Token>, LexError> {
                 let mut tokens = ::std::vec::Vec::new();
                 while input.len() > 0 {
                     let mut was_consumed = false;
@@ -113,13 +114,7 @@ fn generate_static_defs() -> proc_macro2::TokenStream {
     }
 }
 
-fn generate_token_idents(
-    token: &TokenInfo,
-) -> Option<(
-    proc_macro2::Ident,
-    proc_macro2::Ident,
-    Option<proc_macro2::Ident>,
-)> {
+fn generate_token_idents(token: &TokenInfo) -> Option<(Ident, Ident, Option<Ident>)> {
     match token {
         TokenInfo::Exact(ExactToken { name, .. }) => {
             Some((enum_ident(name), struct_ident(name), None))
@@ -131,7 +126,7 @@ fn generate_token_idents(
     }
 }
 
-fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+fn generate_tokens(token_info: &Vec<TokenInfo>, visibility: &TokenStream) -> TokenStream {
     let idents = token_info
         .iter()
         .filter_map(|info| generate_token_idents(info));
@@ -145,10 +140,10 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
     let structs = idents
         .map(|idents| match idents {
             (_, struct_ident, None) => quote! {
-                pub struct #struct_ident;
+                #visibility struct #struct_ident;
             },
             (_, struct_ident, Some(kind_ident)) => quote! {
-                pub struct #struct_ident(pub ::std::rc::Rc<#kind_ident>);
+                #visibility struct #struct_ident(pub ::std::rc::Rc<#kind_ident>);
             },
         })
         .map(|struct_def| {
@@ -162,13 +157,13 @@ fn generate_tokens(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
         #(#structs)*
 
         #[derive(::std::fmt::Debug, ::std::clone::Clone)]
-        pub enum Token {
+        #visibility enum Token {
             #(#enum_entries),*
         }
     }
 }
 
-fn generate_constructor(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream {
+fn generate_constructor(token_info: &Vec<TokenInfo>, visibility: &TokenStream) -> TokenStream {
     let rules = token_info.iter().map(|tok| match tok {
         TokenInfo::Exact(ExactToken { name, pattern }) => {
             let enum_ident = enum_ident(name);
@@ -212,7 +207,7 @@ fn generate_constructor(token_info: &Vec<TokenInfo>) -> proc_macro2::TokenStream
 
     quote! {
         impl Lexer {
-            pub fn new() -> Lexer {
+            #visibility fn new() -> Lexer {
                 return Lexer { rules: ::std::vec![#(#rules),*] };
             }
         }
