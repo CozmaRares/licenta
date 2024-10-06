@@ -4,6 +4,7 @@ mod grammar;
 mod idents;
 mod lexer;
 mod parser;
+mod symbols;
 mod tokens;
 
 use std::{collections::HashMap, rc::Rc};

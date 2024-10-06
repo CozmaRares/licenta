@@ -4,13 +4,14 @@ use quote::quote;
 use crate::{
     data::MacroData,
     idents::{base_ident, tokens::*},
+    symbols::{get_def, Symbol},
     tokens::*,
 };
 
 pub fn generate_lexer(data: &MacroData) -> TokenStream {
-    let defs = generate_static_defs(&data.visibility);
-    let tokens = generate_tokens(&data.tokens, &data.visibility);
-    let constructor = generate_constructor(&data.tokens, &data.visibility);
+    let defs = generate_static_defs(data);
+    let tokens = generate_tokens(data);
+    let constructor = generate_constructor(data);
 
     quote! {
         #defs
@@ -19,24 +20,30 @@ pub fn generate_lexer(data: &MacroData) -> TokenStream {
     }
 }
 
-fn generate_static_defs(visibility: &TokenStream) -> TokenStream {
+fn generate_static_defs(data: &MacroData) -> TokenStream {
+    let visibility = &data.visibility;
+
+    let string = get_def(Symbol::String, data.simple_types);
+    let regex = get_def(Symbol::Regex, data.simple_types);
+    let core_str = get_def(Symbol::CoreStr, data.simple_types);
+
     quote! {
         enum TokenMatcher {
-            Exact(::std::string::String),
-            Regex(::regex::Regex),
+            Exact(#string),
+            Regex(#regex),
         }
 
         impl TokenMatcher {
-            fn regex(re: &::core::primitive::str) -> TokenMatcher {
+            fn regex(re: &#core_str) -> TokenMatcher {
                 let re = ::std::format!("^{re}");
-                let re = ::regex::Regex::new(&re).unwrap();
+                let re = #regex::new(&re).unwrap();
                 TokenMatcher::Regex(re)
             }
         }
 
         enum TokenHandler {
             Pattern(Token),
-            Regex(::std::boxed::Box<dyn ::std::ops::Fn(&::core::primitive::str) -> Token>),
+            Regex(::std::boxed::Box<dyn ::std::ops::Fn(&#core_str) -> Token>),
             Ignore,
         }
 
@@ -46,7 +53,7 @@ fn generate_static_defs(visibility: &TokenStream) -> TokenStream {
         }
 
         impl LexRule {
-            fn matches(&self, input: &::core::primitive::str) -> ::std::option::Option<::core::primitive::usize> {
+            fn matches(&self, input: &#core_str) -> ::std::option::Option<::core::primitive::usize> {
                 match &self.matcher {
                     TokenMatcher::Exact(exact_match) => {
                         input.starts_with(exact_match).then(|| exact_match.len())
@@ -126,7 +133,10 @@ fn generate_token_idents(token: &TokenInfo) -> Option<(Ident, Ident, Option<Iden
     }
 }
 
-fn generate_tokens(token_info: &Vec<TokenInfo>, visibility: &TokenStream) -> TokenStream {
+fn generate_tokens(data: &MacroData) -> TokenStream {
+    let visibility = &data.visibility;
+    let token_info = &data.tokens;
+
     let idents = token_info
         .iter()
         .filter_map(|info| generate_token_idents(info));
@@ -163,7 +173,10 @@ fn generate_tokens(token_info: &Vec<TokenInfo>, visibility: &TokenStream) -> Tok
     }
 }
 
-fn generate_constructor(token_info: &Vec<TokenInfo>, visibility: &TokenStream) -> TokenStream {
+fn generate_constructor(data: &MacroData) -> TokenStream {
+    let visibility = &data.visibility;
+    let token_info = &data.tokens;
+
     let rules = token_info.iter().map(|tok| match tok {
         TokenInfo::Exact(ExactToken { name, pattern }) => {
             let enum_ident = enum_ident(name);
