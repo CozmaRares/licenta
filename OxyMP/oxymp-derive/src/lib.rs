@@ -13,7 +13,8 @@ mod tokens;
 use std::{collections::HashMap, rc::Rc};
 
 use attribute::{
-    parse_exact_token, parse_grammar_attribute, parse_ignore_pattern, parse_regex_token,
+    parse_depth_limit_attr, parse_exact_token, parse_grammar_attribute, parse_ignore_pattern,
+    parse_regex_token,
 };
 use data::MacroData;
 use grammar::{aggragate_grammar_rules, new_grammar_rule, RawGrammarRule};
@@ -88,6 +89,7 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         Some(v) => v,
         None => return Err(syn::Error::new(ast.span(), "Missing grammar rules.")),
     };
+
     let simple_types = match attr_groups.remove("simple_types") {
         Some(v) => match v.len() {
             0 => false,
@@ -102,6 +104,23 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         None => false,
     };
 
+    let depth_limit = match attr_groups.remove("depth_limit") {
+        None => 10,
+        Some(mut v) => match v.len() {
+            0 => 10,
+            1 => {
+                let v = v.remove(0);
+                parse_depth_limit_attr(v)?
+            }
+            _ => {
+                return Err(syn::Error::new(
+                    ast.span(),
+                    "Multiple '#[depth_limit]' attributes.",
+                ))
+            }
+        },
+    };
+
     let token_info = parse_token_attrs(attr_groups)?;
 
     let mut vis_toks = proc_macro2::TokenStream::new();
@@ -112,13 +131,14 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         parser_ident: ast.ident,
         visibility: vis_toks,
         simple_types,
+        depth_limit,
     };
 
     let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
     let grammar_rules = aggragate_grammar_rules(grammar_rules, &data);
 
-    let parser = parser::generate_parser(&data, &grammar_rules);
     let lexer = lexer::generate_lexer(&data);
+    let parser = parser::generate_parser(&data, &grammar_rules);
 
     Ok(quote! {
         #lexer
@@ -128,7 +148,14 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
 
 #[proc_macro_derive(
     RecursiveDescent,
-    attributes(exact_token, regex_token, ignore_pattern, grammar, simple_types)
+    attributes(
+        exact_token,
+        regex_token,
+        ignore_pattern,
+        grammar,
+        simple_types,
+        depth_limit
+    )
 )]
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match derive_impl(input) {

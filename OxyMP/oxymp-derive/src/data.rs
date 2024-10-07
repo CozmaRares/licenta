@@ -5,4 +5,5 @@ pub struct MacroData {
     pub tokens: Vec<TokenInfo>,
     pub visibility: proc_macro2::TokenStream,
     pub simple_types: bool,
+    pub depth_limit: usize,
 }

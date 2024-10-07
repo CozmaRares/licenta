@@ -21,6 +21,7 @@ fn match_number(matched: &str) -> i64 {
 #[ignore_pattern(regex = r"\s+")]
 #[grammar = r"expr ::= Number (('+' | '-') expr)?"]
 #[simple_types]
+#[depth_limit = 10]
 pub(crate) struct Parser;
 
 impl expr {

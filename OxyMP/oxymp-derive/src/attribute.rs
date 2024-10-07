@@ -41,6 +41,34 @@ impl Parse for NameValue {
     }
 }
 
+#[derive(Debug)]
+struct NameValueUsize {
+    name: Spanned<str>,
+    value: usize,
+}
+
+impl Parse for NameValueUsize {
+    fn parse(input: ParseStream) -> syn::Result<NameValueUsize> {
+        let name: proc_macro2::Ident = input.parse()?;
+        let _eq: syn::Token![=] = input.parse()?;
+        let value: syn::LitInt = input.parse()?;
+
+        let value: usize = match value.base10_parse() {
+            Ok(v) => v,
+            Err(_) => return Err(syn::Error::new(value.span(), "Value is not a usize")),
+        };
+
+        Ok(NameValueUsize {
+            name: Spanned {
+                content: name.to_string().into(),
+                span: name.span(),
+            },
+            value,
+        })
+    }
+}
+
+
 struct AttributeList {
     attr: Spanned<str>,
     pairs: Vec<NameValue>,
@@ -72,17 +100,22 @@ impl Parse for AttributeList {
     }
 }
 #[derive(Debug)]
-struct AttributeNameValue(NameValue);
+struct AttributeNameValue<T>(T)
+where
+    T: Parse;
 
-impl Parse for AttributeNameValue {
+impl<T> Parse for AttributeNameValue<T>
+where
+    T: Parse,
+{
     /// Parse `#[attr = "1"]`
-    fn parse(input: ParseStream) -> syn::Result<AttributeNameValue> {
+    fn parse(input: ParseStream) -> syn::Result<AttributeNameValue<T>> {
         let _hash: syn::Token![#] = input.parse()?;
 
         let content_bracketed;
         let _bracketed = syn::bracketed!(content_bracketed in input);
 
-        let key_value: NameValue = content_bracketed.parse()?;
+        let key_value: T = content_bracketed.parse()?;
 
         Ok(AttributeNameValue(key_value))
     }
@@ -201,4 +234,13 @@ pub fn parse_grammar_attribute(
     }
 
     Ok((name.span, value))
+}
+
+//#[depth_limit = 123]
+pub fn parse_depth_limit_attr(input: proc_macro2::TokenStream) -> syn::Result<usize> {
+    let AttributeNameValue(NameValueUsize { name, value }) = syn::parse2(input)?;
+    if &*name.content != "depth_limit" {
+        return Err(syn::Error::new(name.span, "Wrong attribute"));
+    }
+    Ok(value)
 }
