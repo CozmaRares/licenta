@@ -75,8 +75,8 @@ lazy_static! {
         m.insert(Symbol::Fn,    (&["std", "ops"][..], "Fn"    ).into());
         m.insert(Symbol::Deref, (&["std", "ops"][..], "Deref" ).into());
 
-        m.insert(Symbol::FormatMacro, (&["std", "format"][..], "format").into());
-        m.insert(Symbol::VecMacro,    (&["std"          ][..], "vec")    .into());
+        m.insert(Symbol::FormatMacro, (&["std"][..], "format").into());
+        m.insert(Symbol::VecMacro,    (&["std"][..], "vec")   .into());
 
         m.insert(Symbol::Regex, (&["regex"][..], "Regex").into());
 
@@ -92,6 +92,6 @@ pub fn get_def(symbol: Symbol, simple: bool) -> proc_macro2::TokenStream {
         quote! { #base }
     } else {
         let path = def.path.iter().map(|s| base_ident(s));
-        quote! { ::#(#path)::*::base_ident }
+        quote! { ::#(#path)::*::#base }
     }
 }
