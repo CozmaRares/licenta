@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-use core::panic;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -202,6 +201,12 @@ fn generate_ast_node(rule: &str, node: &GrammarNode, data: &MacroData) -> ASTNod
 fn generate_impl(rules: &HashMap<Rc<str>, GrammarNode>, data: &MacroData) -> TokenStream {
     let parser_ident = &data.parser_ident;
 
+    populate_first_terminal_cache(rules, data.depth_limit);
+
+    NODE_FIRST_CACHE.with(|c| eprintln!("{:#?}", c));
+    eprintln!("");
+    RULE_FIRST_CACHE.with(|c| eprintln!("{:#?}", c));
+
     let methods = rules
         .iter()
         .map(|(rule, node)| generate_rule(rule, node, data));
@@ -213,7 +218,6 @@ fn generate_impl(rules: &HashMap<Rc<str>, GrammarNode>, data: &MacroData) -> Tok
     }
 }
 
-#[allow(non_snake_case)]
 fn generate_rule(rule: &str, node: &GrammarNode, data: &MacroData) -> TokenStream {
     let visibility = &data.visibility;
 
@@ -342,30 +346,58 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
     (toks, node_ident)
 }
 
-thread_local! {
-    static CACHE: RefCell<HashMap<*const GrammarNode, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
+fn populate_first_terminal_cache(rules: &HashMap<Rc<str>, GrammarNode>, depth: usize) {
+    rules.iter().for_each(|rule| {
+        compute_rule_first(rule.0.clone(), depth, rules);
+    });
 }
 
-fn first(node: &GrammarNode, depth: usize) -> Rc<HashSet<Rc<str>>> {
-    if let Some(cached) = CACHE.with(|c| c.borrow().get(&(node as *const GrammarNode)).cloned()) {
+thread_local! {
+    static NODE_FIRST_CACHE: RefCell<HashMap<*const GrammarNode, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
+    static RULE_FIRST_CACHE: RefCell<HashMap<Rc<str>, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
+}
+
+
+fn compute_rule_first(
+    rule: Rc<str>,
+    depth: usize,
+    rules: &HashMap<Rc<str>, GrammarNode>,
+) -> Rc<HashSet<Rc<str>>> {
+    if depth == 0 {
+        panic!("Reached depth limit when computing the first token for a grammar rule.")
+    }
+
+    if let Some(cached) = RULE_FIRST_CACHE.with(|c| c.borrow().get(&*rule).cloned()) {
         return cached;
     }
 
-    if depth == 0 {
-        panic!("Depth limit reached");
+    let computed = compute_node_first(rules.get(&*rule).unwrap(), depth, rules);
+    RULE_FIRST_CACHE.with(|c| c.borrow_mut().insert(rule, computed.clone()));
+    computed
+}
+
+fn compute_node_first(
+    node: &GrammarNode,
+    depth: usize,
+    rules: &HashMap<Rc<str>, GrammarNode>,
+) -> Rc<HashSet<Rc<str>>> {
+    if let Some(cached) =
+        NODE_FIRST_CACHE.with(|c| c.borrow().get(&(node as *const GrammarNode)).cloned())
+    {
+        return cached;
     }
 
     let computed = match &node.content {
-        GrammarNodeContent::Rule(rule) => pipe!([rule.clone()] => HashSet::from => Rc::new),
+        GrammarNodeContent::Rule(rule) => compute_rule_first(rule.clone(), depth - 1, rules),
         GrammarNodeContent::Token(token) => {
             pipe!([token.clone()] => HashSet::from => Rc::new)
         }
-        GrammarNodeContent::List(list) => first(list.first().unwrap(), depth - 1),
-        GrammarNodeContent::Optional(opt) => first(opt, depth - 1),
+        GrammarNodeContent::List(list) => compute_node_first(list.first().unwrap(), depth, rules),
+        GrammarNodeContent::Optional(opt) => compute_node_first(opt, depth, rules),
         GrammarNodeContent::Choice(choices, _) => {
             let firsts: HashSet<_> = choices
                 .iter()
-                .map(|choice| first(choice, depth - 1))
+                .map(|choice| compute_node_first(choice, depth, rules))
                 .map(|choice| choice.iter().cloned().collect::<Vec<_>>())
                 .flatten()
                 .collect();
@@ -374,7 +406,7 @@ fn first(node: &GrammarNode, depth: usize) -> Rc<HashSet<Rc<str>>> {
         }
     };
 
-    CACHE.with(|c| {
+    NODE_FIRST_CACHE.with(|c| {
         c.borrow_mut()
             .insert(node as *const GrammarNode, computed.clone())
     });
