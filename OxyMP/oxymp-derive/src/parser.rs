@@ -201,15 +201,9 @@ fn generate_ast_node(rule: &str, node: &GrammarNode, data: &MacroData) -> ASTNod
 fn generate_impl(rules: &HashMap<Rc<str>, GrammarNode>, data: &MacroData) -> TokenStream {
     let parser_ident = &data.parser_ident;
 
-    populate_first_terminal_cache(rules, data.depth_limit);
-
-    NODE_FIRST_CACHE.with(|c| eprintln!("{:#?}", c));
-    eprintln!("");
-    RULE_FIRST_CACHE.with(|c| eprintln!("{:#?}", c));
-
     let methods = rules
         .iter()
-        .map(|(rule, node)| generate_rule(rule, node, data));
+        .map(|(rule, node)| generate_rule(rule, node, rules, data));
 
     quote! {
         impl #parser_ident {
@@ -218,11 +212,16 @@ fn generate_impl(rules: &HashMap<Rc<str>, GrammarNode>, data: &MacroData) -> Tok
     }
 }
 
-fn generate_rule(rule: &str, node: &GrammarNode, data: &MacroData) -> TokenStream {
+fn generate_rule(
+    rule: &str,
+    node: &GrammarNode,
+    rules: &HashMap<Rc<str>, GrammarNode>,
+    data: &MacroData,
+) -> TokenStream {
     let visibility = &data.visibility;
 
     let rule_ident = parser::rule_ident(rule);
-    let defs = expand_node(rule, node, data);
+    let defs = expand_node(rule, node, rules, data);
     let toks = defs.0;
     let ident = defs.1;
 
@@ -239,7 +238,12 @@ fn generate_rule(rule: &str, node: &GrammarNode, data: &MacroData) -> TokenStrea
     }
 }
 
-fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream, Ident) {
+fn expand_node(
+    rule: &str,
+    node: &GrammarNode,
+    rules: &HashMap<Rc<str>, GrammarNode>,
+    data: &MacroData,
+) -> (TokenStream, Ident) {
     let node_ident = parser::idx_ident(node.index);
     let parser_ident = &data.parser_ident;
 
@@ -250,9 +254,13 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
     let _Ok = get_def(Symbol::Ok, data.simple_types);
 
     let toks = match &node.content {
-        GrammarNodeContent::Rule(rule) => {
-            let rule_ident = parser::rule_ident(rule);
+        GrammarNodeContent::Rule(nested_rule) => {
+            let rule_ident = parser::rule_ident(nested_rule);
+            let first = compute_node_first(node, data.depth_limit, rules);
+            let check = generate_token_check(&*rule, &*first, data.simple_types);
+
             quote! {
+                #check
                 let (inp, #node_ident) =
                     #parser_ident::#rule_ident(inp)
                         .map(|(remaining, ast)| (remaining, #_Box::new(ast)))?;
@@ -277,11 +285,17 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
             }
         }
         GrammarNodeContent::List(exprs) => {
-            let defs = exprs.iter().map(|expr| expand_node(rule, expr, data));
+            let defs = exprs
+                .iter()
+                .map(|expr| expand_node(rule, expr, rules, data));
             let toks = defs.clone().map(|d| d.0);
             let idents = defs.map(|d| d.1);
 
+            let first = compute_node_first(node, data.depth_limit, rules);
+            let check = generate_token_check(&*rule, &*first, data.simple_types);
+
             quote! {
+                #check
                 let (inp, #node_ident) = (|| {
                      #(#toks)*
 
@@ -295,7 +309,7 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
         GrammarNodeContent::Choice(choices, choice_idx) => {
             let defs = choices
                 .iter()
-                .map(|expr| expand_node(rule, expr, data))
+                .map(|expr| expand_node(rule, expr, rules, data))
                 .enumerate()
                 .map(|(idx, (toks, ident))| {
                     let idx_ident = parser::idx_ident(idx + 1);
@@ -315,7 +329,11 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
                     }
                 });
 
+            let first = compute_node_first(node, data.depth_limit, rules);
+            let check = generate_token_check(&*rule, &*first, data.simple_types);
+
             quote! {
+                #check
                 let (inp, #node_ident) =  (|| {
                      #(#defs)*
 
@@ -327,10 +345,14 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
             }
         }
         GrammarNodeContent::Optional(opt) => {
-            let (toks, ident) = expand_node(rule, opt, data);
+            let (toks, ident) = expand_node(rule, opt, rules, data);
+
+            let first = compute_node_first(node, data.depth_limit, rules);
+            let check = generate_token_check(&*rule, &*first, data.simple_types);
 
             quote! {
                 let res: ParserState<_> = (|| {
+                    #check
                     let inp = inp.clone();
                     #toks
                     #_Ok((inp, #ident))
@@ -346,17 +368,10 @@ fn expand_node(rule: &str, node: &GrammarNode, data: &MacroData) -> (TokenStream
     (toks, node_ident)
 }
 
-fn populate_first_terminal_cache(rules: &HashMap<Rc<str>, GrammarNode>, depth: usize) {
-    rules.iter().for_each(|rule| {
-        compute_rule_first(rule.0.clone(), depth, rules);
-    });
-}
-
 thread_local! {
     static NODE_FIRST_CACHE: RefCell<HashMap<*const GrammarNode, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
     static RULE_FIRST_CACHE: RefCell<HashMap<Rc<str>, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
 }
-
 
 fn compute_rule_first(
     rule: Rc<str>,
@@ -411,4 +426,35 @@ fn compute_node_first(
             .insert(node as *const GrammarNode, computed.clone())
     });
     computed
+}
+
+fn generate_token_check(
+    rule: &str,
+    first: &HashSet<Rc<str>>,
+    simple_types: bool,
+) -> TokenStream {
+    let _None = get_def(Symbol::None, simple_types);
+    let _Some = get_def(Symbol::Some, simple_types);
+    let _Err = get_def(Symbol::Err, simple_types);
+
+    let branches = first
+        .iter()
+        .map(|token| tokens::enum_ident(token))
+        .map(|ident| quote! { #_Some(Token::#ident(_)) => {} });
+
+    quote! {
+        match inp.get_current() {
+            #_None =>
+                return #_Err(ParseError {
+                    place: #rule.into(),
+                    reason: "Input is empty".into(),
+                }),
+            #(#branches)*
+            #_Some(tok) =>
+                return #_Err(ParseError {
+                    place: #rule.into(),
+                    reason: "Unknown token".into(),
+                }),
+        };
+    }
 }
