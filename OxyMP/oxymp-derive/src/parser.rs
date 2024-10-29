@@ -106,17 +106,8 @@ fn generate_ast(rules: &HashMap<Rc<str>, GrammarNode>, data: &MacroData) -> Toke
         }
     });
 
-    let enum_entries = rules.keys().map(|rule| {
-        let ident = parser::rule_ident(rule);
-        quote! { #ident(#ident) }
-    });
-
     quote! {
         #(#structs)*
-        #[derive(#_Debug)]
-        #visibility enum AST {
-            #(#enum_entries),*
-        }
     }
 }
 
@@ -221,7 +212,7 @@ fn generate_rule(
     let visibility = &data.visibility;
 
     let rule_ident = parser::rule_ident(rule);
-    let defs = expand_node(rule, node, rules, data);
+    let defs = expand_node(rule, node, rules, data, true);
     let toks = defs.0;
     let ident = defs.1;
 
@@ -243,6 +234,7 @@ fn expand_node(
     node: &GrammarNode,
     rules: &HashMap<Rc<str>, GrammarNode>,
     data: &MacroData,
+    needs_check: bool,
 ) -> (TokenStream, Ident) {
     let node_ident = parser::idx_ident(node.index);
     let parser_ident = &data.parser_ident;
@@ -257,7 +249,7 @@ fn expand_node(
         GrammarNodeContent::Rule(nested_rule) => {
             let rule_ident = parser::rule_ident(nested_rule);
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types);
+            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -269,6 +261,7 @@ fn expand_node(
         GrammarNodeContent::Token(token) => {
             let token_enum_entry = tokens::enum_ident(token);
             let error_msg = format!("Expected a {}", token);
+
             quote! {
                 let (inp, #node_ident) = match inp.get_current() {
                     #_None => #_Err(ParseError {
@@ -285,14 +278,14 @@ fn expand_node(
             }
         }
         GrammarNodeContent::List(exprs) => {
-            let defs = exprs
-                .iter()
-                .map(|expr| expand_node(rule, expr, rules, data));
+            let defs = exprs.iter().enumerate().map(|(idx, expr)| {
+                expand_node(rule, expr, rules, data, if idx == 0 { false } else { true })
+            });
             let toks = defs.clone().map(|d| d.0);
             let idents = defs.map(|d| d.1);
 
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types);
+            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -309,7 +302,10 @@ fn expand_node(
         GrammarNodeContent::Choice(choices, choice_idx) => {
             let defs = choices
                 .iter()
-                .map(|expr| expand_node(rule, expr, rules, data))
+                .enumerate()
+                .map(|(idx, expr)| {
+                    expand_node(rule, expr, rules, data, if idx == 0 { false } else { true })
+                })
                 .enumerate()
                 .map(|(idx, (toks, ident))| {
                     let idx_ident = parser::idx_ident(idx + 1);
@@ -330,7 +326,7 @@ fn expand_node(
                 });
 
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types);
+            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -345,10 +341,10 @@ fn expand_node(
             }
         }
         GrammarNodeContent::Optional(opt) => {
-            let (toks, ident) = expand_node(rule, opt, rules, data);
+            let (toks, ident) = expand_node(rule, opt, rules, data, false);
 
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types);
+            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
 
             quote! {
                 let res: ParserState<_> = (|| {
@@ -432,7 +428,12 @@ fn generate_token_check(
     rule: &str,
     first: &HashSet<Rc<str>>,
     simple_types: bool,
+    needs_check: bool,
 ) -> TokenStream {
+    if !needs_check {
+        return quote! {};
+    }
+
     let _None = get_def(Symbol::None, simple_types);
     let _Some = get_def(Symbol::Some, simple_types);
     let _Err = get_def(Symbol::Err, simple_types);
