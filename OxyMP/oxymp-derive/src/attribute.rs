@@ -121,7 +121,7 @@ where
     }
 }
 
-pub fn fit_attribute_list(
+fn fit_attribute_list(
     tokens: proc_macro2::TokenStream,
     expected_attribute_name: &str,
     expected_properties: HashSet<&str>,

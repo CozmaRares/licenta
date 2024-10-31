@@ -17,7 +17,7 @@ use attribute::{
     parse_regex_token,
 };
 use data::MacroData;
-use grammar::{aggragate_grammar_rules, new_grammar_rule, RawGrammarRule};
+use grammar::{aggragate_grammar_rules, new_grammar_rule, GrammarNode};
 use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 
@@ -67,7 +67,8 @@ fn parse_token_attrs(
 
 fn parse_grammar_attrs(
     grammar_attrs: Vec<proc_macro2::TokenStream>,
-) -> syn::Result<Vec<RawGrammarRule>> {
+    data: &MacroData,
+) -> syn::Result<HashMap<Rc<str>, GrammarNode>> {
     let mut rules = Vec::new();
 
     for attr in grammar_attrs {
@@ -78,7 +79,10 @@ fn parse_grammar_attrs(
         }
     }
 
-    Ok(rules)
+    match aggragate_grammar_rules(rules, &data) {
+        Ok(grammar_rules) => Ok(grammar_rules),
+        Err(err) => Err(syn::Error::new(data.parser_ident.span(), err)),
+    }
 }
 
 fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::TokenStream> {
@@ -134,8 +138,7 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         depth_limit,
     };
 
-    let grammar_rules = parse_grammar_attrs(grammar_attrs)?;
-    let grammar_rules = aggragate_grammar_rules(grammar_rules, &data);
+    let grammar_rules = parse_grammar_attrs(grammar_attrs, &data)?;
 
     let lexer = lexer::generate_lexer(&data);
     let parser = parser::generate_parser(&data, &grammar_rules);

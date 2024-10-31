@@ -212,7 +212,7 @@ fn generate_rule(
     let visibility = &data.visibility;
 
     let rule_ident = parser::rule_ident(rule);
-    let defs = expand_node(rule, node, rules, data, true);
+    let defs = expand_node(rule, node, rules, data, false);
     let toks = defs.0;
     let ident = defs.1;
 
@@ -375,7 +375,7 @@ fn compute_rule_first(
     rules: &HashMap<Rc<str>, GrammarNode>,
 ) -> Rc<HashSet<Rc<str>>> {
     if depth == 0 {
-        panic!("Reached depth limit when computing the first token for a grammar rule.")
+        panic!("Possible left recursion deteted! Reached depth limit when computing the first token for the rule: {}", rule);
     }
 
     if let Some(cached) = RULE_FIRST_CACHE.with(|c| c.borrow().get(&*rule).cloned()) {
