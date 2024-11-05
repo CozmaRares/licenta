@@ -11,132 +11,12 @@ use crate::{
 };
 
 pub fn generate_lexer(data: &MacroData) -> TokenStream {
-    let defs = generate_static_defs(data);
     let tokens = generate_tokens(data);
     let constructor = generate_constructor(data);
 
     quote! {
-        #defs
         #tokens
         #constructor
-    }
-}
-
-fn generate_static_defs(data: &MacroData) -> TokenStream {
-    let visibility = &data.visibility;
-
-    let _str = get_def(Symbol::CoreStr, data.simple_types);
-    let _usize = get_def(Symbol::CoreUsize, data.simple_types);
-
-    let _format = get_def(Symbol::FormatMacro, data.simple_types);
-
-    let _String = get_def(Symbol::String, data.simple_types);
-    let _Regex = get_def(Symbol::Regex, data.simple_types);
-    let _Box = get_def(Symbol::Box, data.simple_types);
-    let _Fn = get_def(Symbol::Fn, data.simple_types);
-    let _Vec = get_def(Symbol::Vec, data.simple_types);
-
-    let _Option = get_def(Symbol::Option, data.simple_types);
-    let _Some = get_def(Symbol::Some, data.simple_types);
-    let _None = get_def(Symbol::None, data.simple_types);
-
-    let _Result = get_def(Symbol::Result, data.simple_types);
-    let _Ok = get_def(Symbol::Ok, data.simple_types);
-    let _Err = get_def(Symbol::Err, data.simple_types);
-
-    let _Debug = get_def(Symbol::DeriveDebug, data.simple_types);
-
-    quote! {
-        enum TokenMatcher {
-            Exact(#_String),
-            Regex(#_Regex),
-        }
-
-        impl TokenMatcher {
-            fn regex(re: &#_str) -> TokenMatcher {
-                let re = #_format!("^{re}");
-                let re = #_Regex::new(&re).unwrap();
-                TokenMatcher::Regex(re)
-            }
-        }
-
-        enum TokenHandler {
-            Pattern(Token),
-            Regex(#_Box<dyn #_Fn(&#_str) -> Token>),
-            Ignore,
-        }
-
-        struct LexRule {
-            matcher: TokenMatcher,
-            handler: TokenHandler,
-        }
-
-        impl LexRule {
-            fn matches(&self, input: &#_str) -> #_Option<#_usize> {
-                match &self.matcher {
-                    TokenMatcher::Exact(exact_match) => {
-                        input.starts_with(exact_match).then(|| exact_match.len())
-                    }
-                    TokenMatcher::Regex(re) => {
-                        re
-                            .captures(input)
-                            .map(|captures| captures.get(0))
-                            .flatten()
-                            .map(|matched| matched.end() - matched.start())
-                    }
-                }
-            }
-
-            fn consume<'a>(
-                &self,
-                input: &'a #_str,
-            ) -> #_Option<(#_Option<Token>, &'a #_str)> {
-                self.matches(input).map(|matched_size| {
-                    let token = match &self.handler {
-                        TokenHandler::Ignore     => #_None ,
-                        TokenHandler::Pattern(t) => #_Some(t.clone()),
-                        TokenHandler::Regex(f)   => #_Some(f(&input[..matched_size])),
-                    };
-                    #_Some((token, &input[matched_size..]))
-                })?
-            }
-        }
-
-        #[derive(#_Debug)]
-        #visibility struct LexError<'a> {
-            #visibility input:   &'a #_str,
-            #visibility message: #_String,
-        }
-
-        #visibility struct Lexer {
-            rules: #_Vec<LexRule>,
-        }
-
-        impl Lexer {
-            #visibility fn tokenize(self, mut input: &#_str) -> #_Result<#_Vec<Token>, LexError> {
-                let mut tokens = #_Vec::new();
-                while input.len() > 0 {
-                    let mut was_consumed = false;
-                    for rule in &self.rules {
-                        if let #_Some((token, remaining)) = rule.consume(input) {
-                            if let #_Some(token) = token {
-                                tokens.push(token);
-                            }
-                            input = remaining;
-                            was_consumed = true;
-                            break;
-                        }
-                    }
-                    if !was_consumed {
-                        return #_Err(LexError {
-                            input,
-                            message: "Unknown token".to_string(),
-                        });
-                    }
-                }
-                #_Ok(tokens)
-            }
-        }
     }
 }
 
@@ -203,6 +83,10 @@ fn generate_constructor(data: &MacroData) -> TokenStream {
     let _Rc = get_def(Symbol::Rc, data.simple_types);
     let _Box = get_def(Symbol::Box, data.simple_types);
     let _vec = get_def(Symbol::VecMacro, data.simple_types);
+    let _LexRule = get_def(Symbol::UtilLexRule, data.simple_types);
+    let _Lexer = get_def(Symbol::UtilLexer, data.simple_types);
+    let _TokenHandler = get_def(Symbol::UtilTokenHandler, data.simple_types);
+    let _TokenMatcher = get_def(Symbol::UtilTokenMatcher, data.simple_types);
 
     let rules = token_info.iter().map(|tok| match tok {
         TokenInfo::Exact(ExactToken { name, pattern }) => {
@@ -210,9 +94,9 @@ fn generate_constructor(data: &MacroData) -> TokenStream {
             let struct_ident = struct_ident(name);
 
             quote! {
-                LexRule {
-                    matcher: TokenMatcher::Exact(#pattern.to_string()),
-                    handler: TokenHandler::Pattern(Token::#enum_ident(#struct_ident))
+                #_LexRule {
+                    matcher: #_TokenMatcher::Exact(#pattern.to_string()),
+                    handler: #_TokenHandler::Pattern(Token::#enum_ident(#struct_ident))
                 }
             }
         }
@@ -227,9 +111,9 @@ fn generate_constructor(data: &MacroData) -> TokenStream {
             let fn_ident = base_ident(transformer_fn);
 
             quote! {
-                LexRule {
-                    matcher: TokenMatcher::regex(#regex),
-                    handler: TokenHandler::Regex(
+                #_LexRule {
+                    matcher: #_TokenMatcher::regex(#regex),
+                    handler: #_TokenHandler::Regex(
                         #_Box::new(
                             |matched| Token::#enum_ident(#struct_ident(#_Rc::new(#fn_ident(matched))))
                         )
@@ -238,18 +122,16 @@ fn generate_constructor(data: &MacroData) -> TokenStream {
             }
         }
         TokenInfo::Ignore(IgnorePattern { regex }) => quote! {
-            LexRule {
-                matcher: TokenMatcher::regex(#regex),
-                handler: TokenHandler::Ignore
+            #_LexRule {
+                matcher: #_TokenMatcher::regex(#regex),
+                handler: #_TokenHandler::Ignore
             }
         },
     });
 
     quote! {
-        impl Lexer {
-            #visibility fn new() -> Lexer {
-                return Lexer { rules: #_vec![#(#rules),*] };
-            }
+        #visibility fn create_lexer() -> #_Lexer<Token> {
+            return #_Lexer { rules: #_vec![#(#rules),*] };
         }
     }
 }

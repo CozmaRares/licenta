@@ -33,6 +33,12 @@ pub enum Symbol {
     VecMacro,
 
     Regex,
+
+    UtilTokenMatcher,
+    UtilTokenHandler,
+    UtilLexRule,
+    UtilLexError,
+    UtilLexer,
 }
 
 type Definition<'a> = (&'a [&'a str], &'a str);
@@ -68,6 +74,12 @@ lazy_static! {
         m.insert(Symbol::VecMacro,    (&["std"][..], "vec")   );
 
         m.insert(Symbol::Regex, (&["regex"][..], "Regex"));
+
+        m.insert(Symbol::UtilTokenMatcher, (&["oxymp_util", "lexer"][..], "TokenMatcher"));
+        m.insert(Symbol::UtilTokenHandler, (&["oxymp_util", "lexer"][..], "TokenHandler"));
+        m.insert(Symbol::UtilLexRule,      (&["oxymp_util", "lexer"][..], "LexRule"     ));
+        m.insert(Symbol::UtilLexError,     (&["oxymp_util", "lexer"][..], "LexError"    ));
+        m.insert(Symbol::UtilLexer,        (&["oxymp_util", "lexer"][..], "Lexer"       ));
 
         m
     };

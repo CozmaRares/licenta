@@ -1,6 +1,5 @@
 use oxymp::RecursiveDescent;
-use regex::Regex;
-
+use oxymp_util::lexer::{LexRule, Lexer, TokenHandler, TokenMatcher};
 use std::{ops::Deref, rc::Rc};
 
 fn match_number(matched: &str) -> i64 {
@@ -35,7 +34,7 @@ impl expr {
 }
 
 fn main() {
-    let l = Lexer::new();
+    let l = create_lexer();
 
     let a = l.tokenize("1+2+3").unwrap();
     let a = Parser::expr(a.into()).unwrap();
