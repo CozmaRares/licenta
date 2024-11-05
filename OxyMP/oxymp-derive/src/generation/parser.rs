@@ -146,11 +146,8 @@ fn expand_node(
                             #toks
                             #_Ok((inp, #ident))
                         })();
-                        match r {
-                            #_Ok((inp, ast)) => {
-                                return #_Ok((inp, #choice_ident::#idx_ident(ast)));
-                            }
-                            #_Err(_) => {}
+                        if let #_Ok((inp, ast)) = r {
+                            return #_Ok((inp, #choice_ident::#idx_ident(ast)));
                         };
                     }
                 });

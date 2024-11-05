@@ -64,7 +64,7 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
 
     quote! {
         #visibility fn create_lexer() -> #_Lexer<Token> {
-            return #_Lexer { rules: #_vec![#(#rules),*] };
+            #_Lexer { rules: #_vec![#(#rules),*] }
         }
     }
 }
