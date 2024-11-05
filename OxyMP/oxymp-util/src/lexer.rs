@@ -34,12 +34,11 @@ where
     fn matches(&self, input: &str) -> Option<usize> {
         match &self.matcher {
             TokenMatcher::Exact(exact_match) => {
-                input.starts_with(exact_match).then(|| exact_match.len())
+                input.starts_with(exact_match).then_some(exact_match.len())
             }
             TokenMatcher::Regex(re) => re
                 .captures(input)
-                .map(|captures| captures.get(0))
-                .flatten()
+                .and_then(|captures| captures.get(0))
                 .map(|matched| matched.end() - matched.start()),
         }
     }
@@ -75,7 +74,7 @@ where
 {
     pub fn tokenize(self, mut input: &str) -> Result<Vec<Token>, LexError> {
         let mut tokens = Vec::new();
-        while input.len() > 0 {
+        while !input.is_empty() {
             let mut was_consumed = false;
             for rule in &self.rules {
                 if let Some((token, remaining)) = rule.consume(input) {
