@@ -1,7 +1,5 @@
 use quote::format_ident;
 
-// TODO: PascalCase
-
 pub mod tokens {
     use super::*;
 
@@ -22,7 +20,7 @@ pub mod parser {
     }
 
     pub fn choice_ident(rule: &str, choice_idx: usize) -> proc_macro2::Ident {
-        format_ident!("{}_choice_{}", rule, choice_idx)
+        format_ident!("{}Choice{}", rule, choice_idx)
     }
 
     pub fn idx_ident(idx: usize) -> proc_macro2::Ident {

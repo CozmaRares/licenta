@@ -25,7 +25,7 @@ pub fn generate_impl(data: &MacroData, rules: &HashMap<Rc<str>, GrammarNode>) ->
 
     quote! {
         impl #parser_ident {
-            #(#methods),*
+            #(#methods)*
         }
     }
 }
