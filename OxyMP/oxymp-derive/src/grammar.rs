@@ -234,12 +234,10 @@ fn grammar_rule(input: &str) -> IResult<&str, RawGrammarRule> {
     let (input, rule) = choice(input)?;
     let (input, _) = eof(input)?;
 
-    let inner;
-
-    match name {
-        RawGrammarNode::Name(name) => inner = name,
+    let inner = match name {
+        RawGrammarNode::Name(name) => name,
         _ => unreachable!(),
-    }
+    };
 
     Ok((input, RawGrammarRule { name: inner, rule }))
 }
@@ -251,12 +249,12 @@ fn name(input: &str) -> IResult<&str, RawGrammarNode> {
 
 fn choice(input: &str) -> IResult<&str, RawGrammarNode> {
     let (input, choices) = separated_list1(ws(char('|')), list)(input)?;
-    Ok((input, RawGrammarNode::Choice(choices.into())))
+    Ok((input, RawGrammarNode::Choice(choices)))
 }
 
 fn list(input: &str) -> IResult<&str, RawGrammarNode> {
     let (input, items) = many1(list_item)(input)?;
-    Ok((input, RawGrammarNode::List(items.into())))
+    Ok((input, RawGrammarNode::List(items)))
 }
 
 fn list_item(input: &str) -> IResult<&str, RawGrammarNode> {

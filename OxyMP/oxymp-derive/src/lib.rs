@@ -22,7 +22,7 @@ use syn::spanned::Spanned;
 
 use crate::tokens::TokenInfo;
 
-fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<Rc<str>, Vec<proc_macro2::TokenStream>> {
+fn group_attrs(attrs: &[syn::Attribute]) -> HashMap<Rc<str>, Vec<proc_macro2::TokenStream>> {
     attrs.iter().fold(HashMap::new(), |mut acc, attr| {
         let attr_ident = attr
             .path()
@@ -34,10 +34,10 @@ fn group_attrs(attrs: &Vec<syn::Attribute>) -> HashMap<Rc<str>, Vec<proc_macro2:
             .into();
 
         acc.entry(attr_ident)
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(vec![attr.to_token_stream()]);
 
-        return acc;
+        acc
     })
 }
 
@@ -54,9 +54,8 @@ fn parse_token_attrs(
 
     for (attr, streams) in attr_groups {
         for stream in streams {
-            match token_type_handlers.get(&*attr) {
-                Some(handler) => token_info.push(handler(stream)?),
-                None => {}
+            if let Some(handler) = token_type_handlers.get(&*attr) {
+                token_info.push(handler(stream)?)
             }
         }
     }
@@ -72,13 +71,13 @@ fn parse_grammar_attrs(
 
     for attr in grammar_attrs {
         let (name_span, rule) = parse_grammar_attribute(attr)?;
-        match new_grammar_rule(&*rule) {
+        match new_grammar_rule(&rule) {
             Ok(rule) => rules.push(rule),
             Err(err) => return Err(syn::Error::new(name_span, err.to_string())),
         }
     }
 
-    match aggragate_grammar_rules(rules, &data) {
+    match aggragate_grammar_rules(rules, data) {
         Ok(grammar_rules) => Ok(grammar_rules),
         Err(err) => Err(syn::Error::new(data.parser_ident.span(), err)),
     }

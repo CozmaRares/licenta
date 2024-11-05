@@ -161,7 +161,7 @@ fn fit_attribute_list(
     }
 
     for expected_property in expected_properties {
-        if !found_properties.contains(&*expected_property) {
+        if !found_properties.contains(&expected_property) {
             return Err(syn::Error::new(
                 parsed_attribute.attr.span,
                 format!("Missing property: {}", expected_property),

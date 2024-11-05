@@ -80,7 +80,7 @@ fn expand_node(
         GrammarNodeContent::Rule(nested_rule) => {
             let rule_ident = parser::rule_ident(nested_rule);
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
+            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -109,14 +109,15 @@ fn expand_node(
             }
         }
         GrammarNodeContent::List(exprs) => {
-            let defs = exprs.iter().enumerate().map(|(idx, expr)| {
-                expand_node(rule, expr, rules, data, if idx == 0 { false } else { true })
-            });
+            let defs = exprs
+                .iter()
+                .enumerate()
+                .map(|(idx, expr)| expand_node(rule, expr, rules, data, idx != 0));
             let toks = defs.clone().map(|d| d.0);
             let idents = defs.map(|d| d.1);
 
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
+            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -134,9 +135,7 @@ fn expand_node(
             let defs = choices
                 .iter()
                 .enumerate()
-                .map(|(idx, expr)| {
-                    expand_node(rule, expr, rules, data, if idx == 0 { false } else { true })
-                })
+                .map(|(idx, expr)| expand_node(rule, expr, rules, data, idx != 0))
                 .enumerate()
                 .map(|(idx, (toks, ident))| {
                     let idx_ident = parser::idx_ident(idx + 1);
@@ -157,7 +156,7 @@ fn expand_node(
                 });
 
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
+            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -175,7 +174,7 @@ fn expand_node(
             let (toks, ident) = expand_node(rule, opt, rules, data, false);
 
             let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
+            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
 
             quote! {
                 let res: #_ParserState<_, _> = (|| {
@@ -195,9 +194,11 @@ fn expand_node(
     (toks, node_ident)
 }
 
+type CacheValue = Rc<HashSet<Rc<str>>>;
+
 thread_local! {
-    static NODE_FIRST_CACHE: RefCell<HashMap<*const GrammarNode, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
-    static RULE_FIRST_CACHE: RefCell<HashMap<Rc<str>, Rc<HashSet<Rc<str>>>>> = RefCell::new(HashMap::new());
+    static NODE_FIRST_CACHE: RefCell<HashMap<*const GrammarNode, CacheValue>> = RefCell::new(HashMap::new());
+    static RULE_FIRST_CACHE: RefCell<HashMap<Rc<str>, CacheValue>> = RefCell::new(HashMap::new());
 }
 
 fn compute_rule_first(
@@ -240,8 +241,7 @@ fn compute_node_first(
             let firsts: HashSet<_> = choices
                 .iter()
                 .map(|choice| compute_node_first(choice, depth, rules))
-                .map(|choice| choice.iter().cloned().collect::<Vec<_>>())
-                .flatten()
+                .flat_map(|choice| choice.iter().cloned().collect::<Vec<_>>())
                 .collect();
 
             pipe!(firsts => Rc::new)

@@ -19,7 +19,7 @@ pub fn generate_tokens(data: &MacroData) -> proc_macro2::TokenStream {
 
     let idents = token_info
         .iter()
-        .filter_map(|info| generate_token_idents(info));
+        .filter_map(generate_token_idents);
 
     let enum_entries = idents.clone().map(|(enum_entry, struct_ident, _)| {
         quote! {
