@@ -17,65 +17,12 @@ use crate::{
 };
 
 pub fn generate_parser(data: &MacroData, rules: &HashMap<Rc<str>, GrammarNode>) -> TokenStream {
-    let defs = generate_static_defs(data);
     let ast = generate_ast(rules, data);
     let parser_impl = generate_impl(rules, data);
 
     quote! {
-        #defs
         #ast
         #parser_impl
-    }
-}
-
-fn generate_static_defs(data: &MacroData) -> TokenStream {
-    let visibility = &data.visibility;
-
-    let _Debug = get_def(Symbol::DeriveDebug, data.simple_types);
-    let _Clone = get_def(Symbol::DeriveClone, data.simple_types);
-    let _usize = get_def(Symbol::CoreUsize, data.simple_types);
-    let _Rc = get_def(Symbol::Rc, data.simple_types);
-    let _Deref = get_def(Symbol::Deref, data.simple_types);
-    let _Option = get_def(Symbol::Option, data.simple_types);
-    let _Result = get_def(Symbol::Result, data.simple_types);
-    let _String = get_def(Symbol::String, data.simple_types);
-
-    quote! {
-        #[derive(#_Debug, #_Clone)]
-        #visibility struct ParserInput {
-           #visibility tokens: #_Rc<[Token]>,
-           #visibility current: #_usize,
-        }
-        impl<T> From<T> for ParserInput
-        where
-            T: #_Deref<Target = [Token]>,
-        {
-            fn from(tokens: T) -> ParserInput {
-                ParserInput {
-                    tokens: tokens.deref().into(),
-                    current: 0
-                }
-            }
-        }
-        impl ParserInput {
-            #visibility fn get_current(&self) -> #_Option<&Token> {
-                self.tokens.get(self.current)
-            }
-
-            #visibility fn increment(&self) -> ParserInput {
-                ParserInput {
-                    tokens: self.tokens.clone(),
-                    current: self.current + 1,
-                }
-            }
-        }
-        #visibility type ParserState<T> = #_Result<(ParserInput, T), ParseError>;
-
-        #[derive(#_Debug)]
-        #visibility struct ParseError {
-            #visibility place: #_String,
-            #visibility reason: #_String,
-        }
     }
 }
 
@@ -217,9 +164,11 @@ fn generate_rule(
     let ident = defs.1;
 
     let _Ok = get_def(Symbol::Ok, data.simple_types);
+    let _ParserInput = get_def(Symbol::UtilParserInput, data.simple_types);
+    let _ParserState = get_def(Symbol::UtilParserState, data.simple_types);
 
     quote! {
-        #visibility fn #rule_ident(inp: ParserInput) -> ParserState<#rule_ident> {
+        #visibility fn #rule_ident(inp: #_ParserInput<Token>) -> #_ParserState<Token, #rule_ident> {
             #toks
             #_Ok((
                 inp,
@@ -244,6 +193,8 @@ fn expand_node(
     let _Some = get_def(Symbol::Some, data.simple_types);
     let _Err = get_def(Symbol::Err, data.simple_types);
     let _Ok = get_def(Symbol::Ok, data.simple_types);
+    let _ParseError = get_def(Symbol::UtilParseError, data.simple_types);
+    let _ParserState = get_def(Symbol::UtilParserState, data.simple_types);
 
     let toks = match &node.content {
         GrammarNodeContent::Rule(nested_rule) => {
@@ -264,13 +215,13 @@ fn expand_node(
 
             quote! {
                 let (inp, #node_ident) = match inp.get_current() {
-                    #_None => #_Err(ParseError {
+                    #_None => #_Err(#_ParseError {
                         place: #rule.into(),
                         reason: "Input is empty".into(),
                     }),
                     #_Some(Token::#token_enum_entry(tok)) =>
                         #_Ok((inp.increment(), tok.clone())),
-                    #_Some(tok) => #_Err(ParseError {
+                    #_Some(tok) => #_Err(#_ParseError {
                         place: #rule.into(),
                         reason: #error_msg.into(),
                     })
@@ -312,7 +263,7 @@ fn expand_node(
                     let choice_ident = parser::choice_ident(rule, *choice_idx);
 
                     quote! {
-                        let r: ParserState<_> = (|| {
+                        let r: #_ParserState<_, _> = (|| {
                             #toks
                             #_Ok((inp, #ident))
                         })();
@@ -333,7 +284,7 @@ fn expand_node(
                 let (inp, #node_ident) =  (|| {
                      #(#defs)*
 
-                    #_Err(ParseError {
+                    #_Err(#_ParseError {
                         place: #rule.into(),
                         reason: "All choices failed".into(),
                     })
@@ -347,7 +298,7 @@ fn expand_node(
             let check = generate_token_check(&*rule, &*first, data.simple_types, needs_check);
 
             quote! {
-                let res: ParserState<_> = (|| {
+                let res: #_ParserState<_, _> = (|| {
                     #check
                     let inp = inp.clone();
                     #toks
@@ -437,6 +388,7 @@ fn generate_token_check(
     let _None = get_def(Symbol::None, simple_types);
     let _Some = get_def(Symbol::Some, simple_types);
     let _Err = get_def(Symbol::Err, simple_types);
+    let _ParseError = get_def(Symbol::UtilParseError, simple_types);
 
     let branches = first
         .iter()
@@ -446,13 +398,13 @@ fn generate_token_check(
     quote! {
         match inp.get_current() {
             #_None =>
-                return #_Err(ParseError {
+                return #_Err(#_ParseError {
                     place: #rule.into(),
                     reason: "Input is empty".into(),
                 }),
             #(#branches)*
             #_Some(tok) =>
-                return #_Err(ParseError {
+                return #_Err(#_ParseError {
                     place: #rule.into(),
                     reason: "Unknown token".into(),
                 }),

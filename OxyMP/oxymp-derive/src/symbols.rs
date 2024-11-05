@@ -39,6 +39,10 @@ pub enum Symbol {
     UtilLexRule,
     UtilLexError,
     UtilLexer,
+
+    UtilParserInput,
+    UtilParserState,
+    UtilParseError,
 }
 
 type Definition<'a> = (&'a [&'a str], &'a str);
@@ -80,6 +84,10 @@ lazy_static! {
         m.insert(Symbol::UtilLexRule,      (&["oxymp_util", "lexer"][..], "LexRule"     ));
         m.insert(Symbol::UtilLexError,     (&["oxymp_util", "lexer"][..], "LexError"    ));
         m.insert(Symbol::UtilLexer,        (&["oxymp_util", "lexer"][..], "Lexer"       ));
+
+        m.insert(Symbol::UtilParserInput, (&["oxymp_util", "parser"][..], "ParserInput"));
+        m.insert(Symbol::UtilParserState, (&["oxymp_util", "parser"][..], "ParserState"));
+        m.insert(Symbol::UtilParseError,  (&["oxymp_util", "parser"][..], "ParseError"));
 
         m
     };
