@@ -3,10 +3,9 @@ mod macros;
 
 mod attribute;
 mod data;
+mod generation;
 mod grammar;
 mod idents;
-mod lexer;
-mod parser;
 mod symbols;
 mod tokens;
 
@@ -18,7 +17,7 @@ use attribute::{
 };
 use data::MacroData;
 use grammar::{aggragate_grammar_rules, new_grammar_rule, GrammarNode};
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::spanned::Spanned;
 
 use crate::tokens::TokenInfo;
@@ -140,13 +139,7 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
 
     let grammar_rules = parse_grammar_attrs(grammar_attrs, &data)?;
 
-    let lexer = lexer::generate_lexer(&data);
-    let parser = parser::generate_parser(&data, &grammar_rules);
-
-    Ok(quote! {
-        #lexer
-        #parser
-    })
+    Ok(generation::generate(data, grammar_rules))
 }
 
 #[proc_macro_derive(
