@@ -48,7 +48,7 @@ fn generate_ast(rules: &HashMap<Rc<str>, GrammarNode>, data: &MacroData) -> Toke
             #external_choices
             #[derive(#_Debug)]
             #visibility struct #rule_ident (
-                #main_struct
+                #visibility #main_struct
             );
         }
     });
