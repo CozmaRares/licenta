@@ -1,5 +1,8 @@
+use std::{collections::HashMap, fmt::Formatter};
+
 use regex::Regex;
 
+#[derive(Debug)]
 pub enum TokenMatcher {
     Exact(String),
     Regex(Regex),
@@ -13,15 +16,32 @@ impl TokenMatcher {
     }
 }
 
-pub enum TokenHandler<Token> {
+pub enum TokenHandler<Token>
+where
+    Token: std::fmt::Debug,
+{
     Pattern(Token),
     Regex(Box<dyn Fn(&str) -> Token>),
     Ignore,
 }
 
+impl<Token> std::fmt::Debug for TokenHandler<Token>
+where
+    Token: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenHandler::Pattern(token) => f.debug_tuple("Pattern").field(token).finish(),
+            TokenHandler::Regex(_) => f.debug_tuple("Regex").finish(),
+            TokenHandler::Ignore => f.debug_tuple("Ignore").finish(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct LexRule<Token>
 where
-    Token: Clone,
+    Token: std::fmt::Debug + Clone,
 {
     pub matcher: TokenMatcher,
     pub handler: TokenHandler<Token>,
@@ -29,7 +49,7 @@ where
 
 impl<Token> LexRule<Token>
 where
-    Token: Clone,
+    Token: std::fmt::Debug + Clone,
 {
     fn matches(&self, input: &str) -> Option<usize> {
         match &self.matcher {
@@ -61,16 +81,17 @@ pub struct LexError<'a> {
     pub message: String,
 }
 
+#[derive(Debug)]
 pub struct Lexer<Token>
 where
-    Token: Clone,
+    Token: std::fmt::Debug + Clone,
 {
     pub rules: Vec<LexRule<Token>>,
 }
 
 impl<Token> Lexer<Token>
 where
-    Token: Clone,
+    Token: std::fmt::Debug + Clone,
 {
     pub fn tokenize(self, mut input: &str) -> Result<Vec<Token>, LexError> {
         let mut tokens = Vec::new();
@@ -94,5 +115,49 @@ where
             }
         }
         Ok(tokens)
+    }
+}
+
+pub struct LexerBuilder<Tier, Token>
+where
+    Tier: std::hash::Hash + Ord + Default,
+    Token: std::fmt::Debug + Clone,
+{
+    rules: HashMap<Tier, Vec<LexRule<Token>>>,
+}
+
+impl<Tier, Token> LexerBuilder<Tier, Token>
+where
+    Tier: std::hash::Hash + Ord + Default,
+    Token: std::fmt::Debug + Clone,
+{
+    pub fn new() -> Self {
+        LexerBuilder {
+            rules: HashMap::new(),
+        }
+    }
+
+    pub fn add_rule(&mut self, rule: LexRule<Token>) -> &Self {
+        let tier = Tier::default();
+        self.rules.entry(tier).or_default().extend(vec![rule]);
+        self
+    }
+
+    pub fn add_tiered_rule(&mut self, tier: Tier, rule: LexRule<Token>) -> &Self {
+        self.rules.entry(tier).or_default().extend(vec![rule]);
+        self
+    }
+
+    pub fn build(self) -> Lexer<Token> {
+        let mut rules: Vec<_> = self.rules.into_iter().collect();
+        rules.sort_by(|(key1, _), (key2, _)| key1.cmp(key2));
+
+        let rules = rules
+            .into_iter()
+            .map(|(_, rules)| rules)
+            .flatten()
+            .collect();
+
+        Lexer { rules }
     }
 }
