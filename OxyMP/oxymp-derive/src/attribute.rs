@@ -3,6 +3,7 @@ use std::{
     rc::Rc,
 };
 
+use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -96,7 +97,7 @@ impl std::fmt::Display for PropertyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let variant_str = match self {
             PropertyType::LitStr => "string literal",
-            PropertyType::Path => "enum variant",
+            PropertyType::Path => "path definition",
         };
         write!(f, "{}", variant_str)
     }
@@ -223,6 +224,38 @@ macro_rules! get_str {
     };
 }
 
+macro_rules! get_str_opt {
+    ($val:expr) => {
+        match $val {
+            None => None,
+            Some(syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(name),
+                ..
+            })) => Some(name),
+            _ => unreachable!(),
+        }
+    };
+}
+
+macro_rules! get_path {
+    ($val:expr) => {
+        match $val {
+            Some(syn::Expr::Path(syn::ExprPath { path, .. })) => path,
+            _ => unreachable!(),
+        }
+    };
+}
+
+macro_rules! get_path_opt {
+    ($val:expr) => {
+        match $val {
+            None => None,
+            Some(syn::Expr::Path(syn::ExprPath { path, .. })) => path,
+            _ => unreachable!(),
+        }
+    };
+}
+
 //#[exact_token(name = "Minus", pattern = "-")]
 pub fn parse_exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
     let mut expected_properties = HashMap::new();
@@ -241,17 +274,14 @@ pub fn parse_regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenI
     let mut expected_properties = HashMap::new();
     expected_properties.insert("name", ExpectedProperty::new(PropertyType::LitStr));
     expected_properties.insert("regex", ExpectedProperty::new(PropertyType::LitStr));
-    expected_properties.insert(
-        "transformer_fn",
-        ExpectedProperty::new(PropertyType::LitStr),
-    );
-    expected_properties.insert("kind", ExpectedProperty::new(PropertyType::LitStr));
+    expected_properties.insert("transformer_fn", ExpectedProperty::new(PropertyType::Path));
+    expected_properties.insert("kind", ExpectedProperty::new(PropertyType::Path));
 
     let mut attr = fit_attribute_list(tokens, "regex_token", expected_properties)?;
     let name = get_str!(attr.remove("name")).value().into();
     let regex = get_str!(attr.remove("regex")).value().into();
-    let transformer_fn = get_str!(attr.remove("transformer_fn")).value().into();
-    let kind = get_str!(attr.remove("kind")).value().into();
+    let transformer_fn = get_path!(attr.remove("transformer_fn")).into_token_stream().into();
+    let kind = get_path!(attr.remove("kind")).into_token_stream().into();
 
     Ok(TokenInfo::Regex(RegexToken {
         name,

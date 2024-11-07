@@ -41,14 +41,13 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
         }) => {
             let enum_ident = tokens::enum_ident(name);
             let struct_ident = tokens::struct_ident(name);
-            let fn_ident = base_ident(transformer_fn);
 
             quote! {
                 #_LexRule {
                     matcher: #_TokenMatcher::regex(#regex),
                     handler: #_TokenHandler::Regex(
                         #_Box::new(
-                            |matched| Token::#enum_ident(#struct_ident(#_Rc::new(#fn_ident(matched))))
+                            |matched| Token::#enum_ident(#struct_ident(#_Rc::new(#transformer_fn(matched))))
                         )
                     )
                 }

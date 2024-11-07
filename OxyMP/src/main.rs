@@ -6,8 +6,12 @@ use oxymp_util::{
     parser::{ParseError, ParserInput, ParserState},
 };
 
-fn match_number(matched: &str) -> i64 {
-    matched.parse().unwrap()
+mod nested {
+    pub type Int = i64;
+
+    pub fn match_number(matched: &str) -> i64 {
+        matched.parse().unwrap()
+    }
 }
 
 #[derive(RecursiveDescent)]
@@ -18,8 +22,8 @@ fn match_number(matched: &str) -> i64 {
 #[regex_token(
     name = "Number",
     regex = r"[0-9]+",
-    transformer_fn = "match_number",
-    kind = "i64"
+    transformer_fn = nested::match_number,
+    kind = nested::Int
 )]
 #[ignore_pattern(regex = r"\s+")]
 #[grammar = r"Int ::= Number | Minus Int"]

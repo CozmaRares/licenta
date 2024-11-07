@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use std::rc::Rc;
+
 use proc_macro2::Ident;
 use quote::quote;
 
@@ -57,13 +59,13 @@ pub fn generate_tokens(data: &MacroData) -> proc_macro2::TokenStream {
     }
 }
 
-fn generate_token_idents(token: &TokenInfo) -> Option<(Ident, Ident, Option<Ident>)> {
+fn generate_token_idents(token: &TokenInfo) -> Option<(Ident, Ident, Option<Rc<proc_macro2::TokenStream>>)> {
     match token {
         TokenInfo::Exact(ExactToken { name, .. }) => {
             Some((enum_ident(name), struct_ident(name), None))
         }
         TokenInfo::Regex(RegexToken { name, kind, .. }) => {
-            Some((enum_ident(name), struct_ident(name), Some(base_ident(kind))))
+            Some((enum_ident(name), struct_ident(name), Some(kind.clone())))
         }
         TokenInfo::Ignore(_) => None,
     }

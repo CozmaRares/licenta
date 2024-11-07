@@ -10,8 +10,8 @@ pub struct ExactToken {
 pub struct RegexToken {
     pub name: Rc<str>,
     pub regex: Rc<str>,
-    pub transformer_fn: Rc<str>,
-    pub kind: Rc<str>,
+    pub transformer_fn: Rc<proc_macro2::TokenStream>,
+    pub kind: Rc<proc_macro2::TokenStream>,
 }
 
 #[derive(Debug)]
