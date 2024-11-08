@@ -22,7 +22,7 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
     let _TokenMatcher = get_def(Symbol::UtilTokenMatcher, data.simple_types);
 
     let rules = token_info.iter().map(|tok| match tok {
-        TokenInfo::Exact(ExactToken { name, pattern }) => {
+        TokenInfo::Exact(ExactToken { name, pattern, tier }) => {
             let enum_ident = tokens::enum_ident(name);
             let struct_ident = tokens::struct_ident(name);
 
@@ -37,6 +37,7 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
             name,
             regex,
             transformer_fn,
+            tier,
             ..
         }) => {
             let enum_ident = tokens::enum_ident(name);
@@ -53,7 +54,7 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
                 }
             }
         }
-        TokenInfo::Ignore(IgnorePattern { regex }) => quote! {
+        TokenInfo::Ignore(IgnorePattern { regex, tier  }) => quote! {
             #_LexRule {
                 matcher: #_TokenMatcher::regex(#regex),
                 handler: #_TokenHandler::Ignore
