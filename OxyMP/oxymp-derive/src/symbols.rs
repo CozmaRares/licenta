@@ -7,13 +7,9 @@ use crate::idents::base_ident;
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum Symbol {
-    CoreStr,
-    CoreUsize,
-
     DeriveDebug,
     DeriveClone,
 
-    Result,
     Ok,
     Err,
 
@@ -21,23 +17,14 @@ pub enum Symbol {
     None,
     Some,
 
-    String,
     Box,
-    Vec,
     Rc,
 
-    Fn,
-    Deref,
-
-    FormatMacro,
     VecMacro,
-
-    Regex,
 
     UtilTokenMatcher,
     UtilTokenHandler,
     UtilLexRule,
-    UtilLexError,
     UtilLexer,
 
     UtilParserInput,
@@ -52,13 +39,9 @@ lazy_static! {
     static ref STD_LIB: HashMap<Symbol, Definition<'static>> = {
         let mut m = HashMap::new();
 
-        m.insert(Symbol::CoreStr,   (&["core", "primitive"][..], "str"  ));
-        m.insert(Symbol::CoreUsize, (&["core", "primitive"][..], "usize"));
-
         m.insert(Symbol::DeriveDebug, (&["std", "fmt"  ][..], "Debug"));
         m.insert(Symbol::DeriveClone, (&["std", "clone"][..], "Clone"));
 
-        m.insert(Symbol::Result, (&["std", "result"          ][..], "Result"));
         m.insert(Symbol::Ok,     (&["std", "result", "Result"][..], "Ok"    ));
         m.insert(Symbol::Err,    (&["std", "result", "Result"][..], "Err"   ));
 
@@ -66,23 +49,14 @@ lazy_static! {
         m.insert(Symbol::None,   (&["std", "option", "Option"][..], "None"  ));
         m.insert(Symbol::Some,   (&["std", "option", "Option"][..], "Some"  ));
 
-        m.insert(Symbol::String, (&["std", "string"][..], "String"));
         m.insert(Symbol::Box,    (&["std", "boxed" ][..], "Box"   ));
-        m.insert(Symbol::Vec,    (&["std", "vec"   ][..], "Vec"   ));
         m.insert(Symbol::Rc,     (&["std", "rc"    ][..], "Rc"    ));
 
-        m.insert(Symbol::Fn,    (&["std", "ops"][..], "Fn"    ));
-        m.insert(Symbol::Deref, (&["std", "ops"][..], "Deref" ));
-
-        m.insert(Symbol::FormatMacro, (&["std"][..], "format"));
         m.insert(Symbol::VecMacro,    (&["std"][..], "vec")   );
-
-        m.insert(Symbol::Regex, (&["regex"][..], "Regex"));
 
         m.insert(Symbol::UtilTokenMatcher, (&["oxymp_util", "lexer"][..], "TokenMatcher"));
         m.insert(Symbol::UtilTokenHandler, (&["oxymp_util", "lexer"][..], "TokenHandler"));
         m.insert(Symbol::UtilLexRule,      (&["oxymp_util", "lexer"][..], "LexRule"     ));
-        m.insert(Symbol::UtilLexError,     (&["oxymp_util", "lexer"][..], "LexError"    ));
         m.insert(Symbol::UtilLexer,        (&["oxymp_util", "lexer"][..], "Lexer"       ));
 
         m.insert(Symbol::UtilParserInput, (&["oxymp_util", "parser"][..], "ParserInput"));

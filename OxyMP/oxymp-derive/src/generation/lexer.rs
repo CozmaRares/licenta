@@ -4,7 +4,7 @@ use quote::quote;
 
 use crate::{
     data::MacroData,
-    idents::{base_ident, tokens},
+    idents::tokens,
     symbols::{get_def, Symbol},
     tokens::{ExactToken, IgnorePattern, RegexToken, TokenInfo},
 };

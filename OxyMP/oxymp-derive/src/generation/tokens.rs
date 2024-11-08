@@ -7,10 +7,7 @@ use quote::quote;
 
 use crate::{
     data::MacroData,
-    idents::{
-        base_ident,
-        tokens::{enum_ident, struct_ident},
-    },
+    idents::tokens::{enum_ident, struct_ident},
     symbols::{get_def, Symbol},
     tokens::{ExactToken, RegexToken, TokenInfo},
 };
@@ -19,9 +16,7 @@ pub fn generate_tokens(data: &MacroData) -> proc_macro2::TokenStream {
     let visibility = &data.visibility;
     let token_info = &data.tokens;
 
-    let idents = token_info
-        .iter()
-        .filter_map(generate_token_idents);
+    let idents = token_info.iter().filter_map(generate_token_idents);
 
     let enum_entries = idents.clone().map(|(enum_entry, struct_ident, _)| {
         quote! {
@@ -59,7 +54,9 @@ pub fn generate_tokens(data: &MacroData) -> proc_macro2::TokenStream {
     }
 }
 
-fn generate_token_idents(token: &TokenInfo) -> Option<(Ident, Ident, Option<Rc<proc_macro2::TokenStream>>)> {
+fn generate_token_idents(
+    token: &TokenInfo,
+) -> Option<(Ident, Ident, Option<Rc<proc_macro2::TokenStream>>)> {
     match token {
         TokenInfo::Exact(ExactToken { name, .. }) => {
             Some((enum_ident(name), struct_ident(name), None))
