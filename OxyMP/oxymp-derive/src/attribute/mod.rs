@@ -9,6 +9,7 @@ use crate::tokens::{ExactToken, IgnorePattern, RegexToken, TokenInfo};
 use base::*;
 
 //#[exact_token(name = "Minus", pattern = "-")]
+//#[exact_token(name = "Minus", pattern = "-", tier = Tier::Level)]
 pub fn parse_exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
     let mut expected_properties = HashMap::new();
     expected_properties.insert("name", ExpectedProperty::new(PropertyType::LitStr));
@@ -26,8 +27,8 @@ pub fn parse_exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenI
         tier,
     }))
 }
-
 //#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64")]
+//#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64", tier = Tier::Level)]
 pub fn parse_regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
     let mut expected_properties = HashMap::new();
     expected_properties.insert("name", ExpectedProperty::new(PropertyType::LitStr));
@@ -53,6 +54,7 @@ pub fn parse_regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenI
 }
 
 //#[ignore_pattern(regex = r"\s+")]
+//#[ignore_pattern(regex = r"\s+", tier = Tier::Level)]
 pub fn parse_ignore_pattern(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
     let mut expected_properties = HashMap::new();
     expected_properties.insert("regex", ExpectedProperty::new(PropertyType::LitStr));

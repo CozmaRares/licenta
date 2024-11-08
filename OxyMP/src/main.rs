@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use oxymp::RecursiveDescent;
 use oxymp_util::{
-    lexer::{LexRule, Lexer, TokenHandler, TokenMatcher},
+    lexer::{DefaultTokenTier, LexRule, Lexer, LexerBuilder, TokenHandler, TokenMatcher},
     parser::{ParseError, ParserInput, ParserState},
 };
 
@@ -15,9 +15,9 @@ mod nested {
 }
 
 #[derive(RecursiveDescent)]
-#[exact_token(name = "ParanLeft", pattern = "(")]
-#[exact_token(name = "ParanRight", pattern = ")")]
-#[exact_token(name = "Plus", pattern = "+")]
+#[exact_token(name = "ParanLeft", pattern = "(", tier = DefaultTokenTier::Low)]
+#[exact_token(name = "ParanRight", pattern = ")", tier = DefaultTokenTier::Medium)]
+#[exact_token(name = "Plus", pattern = "+", tier = DefaultTokenTier::High)]
 #[exact_token(name = "Minus", pattern = "-")]
 #[regex_token(
     name = "Number",

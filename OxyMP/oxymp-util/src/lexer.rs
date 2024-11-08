@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Formatter};
+use std::collections::HashMap;
 
 use regex::Regex;
 
@@ -29,7 +29,7 @@ impl<Token> std::fmt::Debug for TokenHandler<Token>
 where
     Token: std::fmt::Debug,
 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TokenHandler::Pattern(token) => f.debug_tuple("Pattern").field(token).finish(),
             TokenHandler::Regex(_) => f.debug_tuple("Regex").finish(),
@@ -118,18 +118,26 @@ where
     }
 }
 
-pub struct LexerBuilder<Tier, Token>
+#[derive(Ord, Eq, PartialEq, PartialOrd, Default, Hash)]
+pub enum DefaultTokenTier {
+    High,
+    Medium,
+    #[default]
+    Low,
+}
+
+pub struct LexerBuilder<Token, Tier = DefaultTokenTier>
 where
-    Tier: std::hash::Hash + Ord + Default,
     Token: std::fmt::Debug + Clone,
+    Tier: std::hash::Hash + Ord + Default,
 {
     rules: HashMap<Tier, Vec<LexRule<Token>>>,
 }
 
-impl<Tier, Token> LexerBuilder<Tier, Token>
+impl<Token, Tier> LexerBuilder<Token, Tier>
 where
-    Tier: std::hash::Hash + Ord + Default,
     Token: std::fmt::Debug + Clone,
+    Tier: std::hash::Hash + Ord + Default,
 {
     pub fn new() -> Self {
         LexerBuilder {
@@ -137,15 +145,13 @@ where
         }
     }
 
-    pub fn add_rule(&mut self, rule: LexRule<Token>) -> &Self {
+    pub fn add_rule(&mut self, rule: LexRule<Token>) {
         let tier = Tier::default();
         self.rules.entry(tier).or_default().extend(vec![rule]);
-        self
     }
 
-    pub fn add_tiered_rule(&mut self, tier: Tier, rule: LexRule<Token>) -> &Self {
+    pub fn add_tiered_rule(&mut self, tier: Tier, rule: LexRule<Token>) {
         self.rules.entry(tier).or_default().extend(vec![rule]);
-        self
     }
 
     pub fn build(self) -> Lexer<Token> {

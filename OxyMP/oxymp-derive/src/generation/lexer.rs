@@ -13,25 +13,74 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
     let visibility = &data.visibility;
     let token_info = &data.tokens;
 
-    let _Rc = get_def(Symbol::Rc, data.simple_types);
-    let _Box = get_def(Symbol::Box, data.simple_types);
-    let _vec = get_def(Symbol::VecMacro, data.simple_types);
-    let _LexRule = get_def(Symbol::UtilLexRule, data.simple_types);
-    let _Lexer = get_def(Symbol::UtilLexer, data.simple_types);
-    let _TokenHandler = get_def(Symbol::UtilTokenHandler, data.simple_types);
-    let _TokenMatcher = get_def(Symbol::UtilTokenMatcher, data.simple_types);
+    let rules = token_info
+        .iter()
+        .map(|tok| generate_rule(tok, data.simple_types));
 
-    let rules = token_info.iter().map(|tok| match tok {
-        TokenInfo::Exact(ExactToken { name, pattern, tier }) => {
+    let has_tier = rules.clone().any(|(tier, _rule)| tier.is_some());
+
+    let rules = rules.map(|(tier, rule)| match tier {
+        None => quote! {
+            builder.add_rule(#rule);
+        },
+        Some(tier) => quote! {
+            builder.add_tiered_rule(#tier, #rule);
+        },
+    });
+
+    let _Lexer = get_def(Symbol::UtilLexer, data.simple_types);
+    let _LexerBuilder = get_def(Symbol::UtilLexerBuilder, data.simple_types);
+
+    let builder_tokens = if has_tier {
+        quote! {
+            #_LexerBuilder::new()
+        }
+    } else {
+        quote! {
+            #_LexerBuilder::<Token>::new()
+        }
+    };
+
+    quote! {
+        #visibility fn create_lexer() -> #_Lexer<Token> {
+            let mut builder = #builder_tokens;
+            #(#rules)*
+            builder.build()
+        }
+    }
+}
+
+fn generate_rule<'a>(
+    tok: &'a TokenInfo,
+    simple: bool,
+) -> (
+    &'a Option<proc_macro2::TokenStream>,
+    proc_macro2::TokenStream,
+) {
+    let _Rc = get_def(Symbol::Rc, simple);
+    let _Box = get_def(Symbol::Box, simple);
+    let _LexRule = get_def(Symbol::UtilLexRule, simple);
+    let _TokenHandler = get_def(Symbol::UtilTokenHandler, simple);
+    let _TokenMatcher = get_def(Symbol::UtilTokenMatcher, simple);
+
+    match tok {
+        TokenInfo::Exact(ExactToken {
+            name,
+            pattern,
+            tier,
+        }) => {
             let enum_ident = tokens::enum_ident(name);
             let struct_ident = tokens::struct_ident(name);
 
-            quote! {
-                #_LexRule {
-                    matcher: #_TokenMatcher::Exact(#pattern.to_string()),
-                    handler: #_TokenHandler::Pattern(Token::#enum_ident(#struct_ident))
-                }
-            }
+            (
+                tier,
+                quote! {
+                    #_LexRule {
+                        matcher: #_TokenMatcher::Exact(#pattern.to_string()),
+                        handler: #_TokenHandler::Pattern(Token::#enum_ident(#struct_ident))
+                    }
+                },
+            )
         }
         TokenInfo::Regex(RegexToken {
             name,
@@ -43,28 +92,28 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
             let enum_ident = tokens::enum_ident(name);
             let struct_ident = tokens::struct_ident(name);
 
+            (
+                tier,
+                quote! {
+                    #_LexRule {
+                        matcher: #_TokenMatcher::regex(#regex),
+                        handler: #_TokenHandler::Regex(
+                            #_Box::new(
+                                |matched| Token::#enum_ident(#struct_ident(#_Rc::new(#transformer_fn(matched))))
+                            )
+                        )
+                    }
+                },
+            )
+        }
+        TokenInfo::Ignore(IgnorePattern { regex, tier }) => (
+            tier,
             quote! {
                 #_LexRule {
                     matcher: #_TokenMatcher::regex(#regex),
-                    handler: #_TokenHandler::Regex(
-                        #_Box::new(
-                            |matched| Token::#enum_ident(#struct_ident(#_Rc::new(#transformer_fn(matched))))
-                        )
-                    )
+                    handler: #_TokenHandler::Ignore
                 }
-            }
-        }
-        TokenInfo::Ignore(IgnorePattern { regex, tier  }) => quote! {
-            #_LexRule {
-                matcher: #_TokenMatcher::regex(#regex),
-                handler: #_TokenHandler::Ignore
-            }
-        },
-    });
-
-    quote! {
-        #visibility fn create_lexer() -> #_Lexer<Token> {
-            #_Lexer { rules: #_vec![#(#rules),*] }
-        }
+            },
+        ),
     }
 }

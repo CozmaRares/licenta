@@ -1,7 +1,5 @@
 #![allow(non_snake_case)]
 
-use std::rc::Rc;
-
 use proc_macro2::Ident;
 use quote::quote;
 
