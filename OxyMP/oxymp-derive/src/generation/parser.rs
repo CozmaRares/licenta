@@ -79,8 +79,8 @@ fn expand_node(
     let toks = match &node.content {
         GrammarNodeContent::Rule(nested_rule) => {
             let rule_ident = parser::rule_ident(nested_rule);
-            let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
+            let dir_set = compute_dir_set(nested_rule, node, data.depth_limit, rules);
+            let check = generate_token_check(rule, &dir_set, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -116,8 +116,8 @@ fn expand_node(
             let toks = defs.clone().map(|d| d.0);
             let idents = defs.map(|d| d.1);
 
-            let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
+            let dir_set = compute_dir_set(rule, node, data.depth_limit, rules);
+            let check = generate_token_check(rule, &dir_set, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -151,8 +151,8 @@ fn expand_node(
                     }
                 });
 
-            let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
+            let dir_set = compute_dir_set(rule, node, data.depth_limit, rules);
+            let check = generate_token_check(rule, &dir_set, data.simple_types, needs_check);
 
             quote! {
                 #check
@@ -169,8 +169,8 @@ fn expand_node(
         GrammarNodeContent::Optional(opt) => {
             let (toks, ident) = expand_node(rule, opt, rules, data, false);
 
-            let first = compute_node_first(node, data.depth_limit, rules);
-            let check = generate_token_check(rule, &first, data.simple_types, needs_check);
+            let dir_set = compute_dir_set(rule, node, data.depth_limit, rules);
+            let check = generate_token_check(rule, &dir_set, data.simple_types, needs_check);
 
             quote! {
                 let res: #_ParserState<_, _> = (|| {
@@ -190,17 +190,15 @@ fn expand_node(
     (toks, node_ident)
 }
 
-type FirstTokens = HashSet<Rc<str>>;
-
 #[derive(Clone)]
-struct FirstCheck {
-    tokens: Rc<FirstTokens>,
+struct DirectionSet {
+    tokens: Rc<HashSet<Rc<str>>>,
     nullable: bool,
 }
 
-impl FirstCheck {
-    fn nullable(self) -> FirstCheck {
-        FirstCheck {
+impl DirectionSet {
+    fn nullable(self) -> DirectionSet {
+        DirectionSet {
             tokens: self.tokens,
             nullable: true,
         }
@@ -208,86 +206,77 @@ impl FirstCheck {
 }
 
 thread_local! {
-    static NODE_FIRST_CACHE: RefCell<HashMap<*const GrammarNode, FirstCheck>> = RefCell::new(HashMap::new());
-    static RULE_FIRST_CACHE: RefCell<HashMap<Rc<str>, FirstCheck>> = RefCell::new(HashMap::new());
+    static DIRECTION_SET_CACHE: RefCell<HashMap<*const GrammarNode, DirectionSet>> = RefCell::new(HashMap::new());
 }
 
-fn compute_rule_first(
-    rule: Rc<str>,
-    depth: usize,
-    rules: &HashMap<Rc<str>, GrammarNode>,
-) -> FirstCheck {
-    if depth == 0 {
-        panic!("Possible left recursion deteted! Reached depth limit when computing the first token for the rule: {}", rule);
-    }
-
-    if let Some(cached) = RULE_FIRST_CACHE.with(|c| c.borrow().get(&*rule).cloned()) {
-        return cached;
-    }
-
-    let computed = compute_node_first(rules.get(&*rule).unwrap(), depth, rules);
-    RULE_FIRST_CACHE.with(|c| c.borrow_mut().insert(rule, computed.clone()));
-    computed
-}
-
-fn compute_node_first(
+fn compute_dir_set(
+    current_rule: &str,
     node: &GrammarNode,
     depth: usize,
     rules: &HashMap<Rc<str>, GrammarNode>,
-) -> FirstCheck {
+) -> DirectionSet {
+    if depth == 0 {
+        panic!("Possible left recursion deteted! Reached depth limit when computing the direction set for the rule: {}", current_rule);
+    }
+
     if let Some(cached) =
-        NODE_FIRST_CACHE.with(|c| c.borrow().get(&(node as *const GrammarNode)).cloned())
+        DIRECTION_SET_CACHE.with(|c| c.borrow().get(&(node as *const GrammarNode)).cloned())
     {
         return cached;
     }
 
     let computed = match &node.content {
-        GrammarNodeContent::Rule(rule) => compute_rule_first(rule.clone(), depth - 1, rules),
-        GrammarNodeContent::Token(token) => FirstCheck {
+        GrammarNodeContent::Rule(rule) => {
+            let rule_node = rules.get(rule).unwrap();
+            compute_dir_set(rule, rule_node, depth - 1, rules)
+        }
+        GrammarNodeContent::Token(token) => DirectionSet {
             tokens: pipe!([token.clone()] => HashSet::from => Rc::new),
             nullable: false,
         },
         GrammarNodeContent::List(list) => {
-            let mut firsts = HashSet::new();
+            let mut dir_set = HashSet::new();
             let mut nullable = true;
 
             for list_node in list {
-                let first = compute_node_first(list_node, depth, rules);
+                let node_set = compute_dir_set(current_rule, list_node, depth, rules);
 
-                firsts.extend(<HashSet<Rc<str>> as Clone>::clone(&first.tokens).into_iter());
+                dir_set.extend(<HashSet<Rc<str>> as Clone>::clone(&node_set.tokens).into_iter());
 
-                if !first.nullable {
+                if !node_set.nullable {
                     nullable = false;
                     break;
                 }
             }
 
-            FirstCheck {
-                tokens: pipe!(firsts => Rc::new),
+            DirectionSet {
+                tokens: pipe!(dir_set => Rc::new),
                 nullable,
             }
         }
-        GrammarNodeContent::Optional(opt) => compute_node_first(opt, depth, rules).nullable(),
+        GrammarNodeContent::Optional(opt) => {
+            compute_dir_set(current_rule, opt, depth, rules).nullable()
+        }
         GrammarNodeContent::Choice(choices, _) => {
             let mut choices = choices
                 .iter()
-                .map(|choice| compute_node_first(choice, depth, rules));
+                .map(|choice| compute_dir_set(current_rule, choice, depth, rules));
 
-            let firsts: HashSet<_> = choices
+            let set: HashSet<_> = choices
                 .clone()
                 .flat_map(|choice| choice.tokens.iter().cloned().collect::<Vec<_>>())
                 .collect();
 
             let nullable = choices.any(|choice| choice.nullable);
 
-            FirstCheck {
-                tokens: pipe!(firsts => Rc::new),
+            DirectionSet {
+                tokens: pipe!(set => Rc::new),
                 nullable,
             }
         }
     };
 
-    NODE_FIRST_CACHE.with(|c| {
+    DIRECTION_SET_CACHE.with(|c| {
         c.borrow_mut()
             .insert(node as *const GrammarNode, computed.clone())
     });
@@ -296,7 +285,7 @@ fn compute_node_first(
 
 fn generate_token_check(
     rule: &str,
-    check: &FirstCheck,
+    check: &DirectionSet,
     simple_types: bool,
     needs_check: bool,
 ) -> TokenStream {
