@@ -76,6 +76,8 @@ fn expand_node(
     let _Ok = get_def(Symbol::Ok, data.simple_types);
     let _ParseError = get_def(Symbol::UtilParseError, data.simple_types);
     let _ParserState = get_def(Symbol::UtilParserState, data.simple_types);
+    let _ParseErrorReason = get_def(Symbol::UtilParseErrorReason, data.simple_types);
+    let _vec = get_def(Symbol::VecMacro, data.simple_types);
 
     let toks = match &node.content {
         GrammarNodeContent::Rule(nested_rule) => {
@@ -92,19 +94,26 @@ fn expand_node(
         }
         GrammarNodeContent::Token(token) => {
             let token_enum_entry = tokens::enum_ident(token);
-            let error_msg = format!("Expected a {}", token);
+            let token_enum_entry_string = token_enum_entry.to_string();
 
             quote! {
                 let (inp, #node_ident) = match inp.get_current() {
                     #_None => #_Err(#_ParseError {
-                        place: #rule.into(),
-                        reason: "Input is empty".into(),
+                        rule: #rule.into(),
+                        input_location: inp.current,
+                        reason: #_ParseErrorReason::UnexpectedEOI {
+                            expected: #_vec![#token_enum_entry_string.into()],
+                        },
                     }),
                     #_Some(Token::#token_enum_entry(tok)) =>
                         #_Ok((inp.increment(), tok.clone())),
                     #_Some(tok) => #_Err(#_ParseError {
-                        place: #rule.into(),
-                        reason: #error_msg.into(),
+                        rule: #rule.into(),
+                        input_location: inp.current,
+                        reason: #_ParseErrorReason::UnexpectedToken {
+                            expected: #_vec![#token_enum_entry_string.into()],
+                            token: tok.clone(),
+                        }
                     })
                 }?;
             }
@@ -161,8 +170,9 @@ fn expand_node(
                      #(#defs)*
 
                     #_Err(#_ParseError {
-                        place: #rule.into(),
-                        reason: "All choices failed".into(),
+                        rule: #rule.into(),
+                        input_location: inp.current,
+                        reason: #_ParseErrorReason::AllChoicesFailed,
                     })
                 })()?;
             }
@@ -298,6 +308,15 @@ fn generate_token_check(
     let _Some = get_def(Symbol::Some, simple_types);
     let _Err = get_def(Symbol::Err, simple_types);
     let _ParseError = get_def(Symbol::UtilParseError, simple_types);
+    let _ParseErrorReason = get_def(Symbol::UtilParseErrorReason, simple_types);
+    let _vec = get_def(Symbol::VecMacro, simple_types);
+
+    let token_names: Vec<_> = check
+        .tokens
+        .iter()
+        .map(|token| tokens::enum_ident(token).to_string())
+        .map(|token| quote! { #token.into() })
+        .collect();
 
     let branches = check
         .tokens
@@ -307,17 +326,22 @@ fn generate_token_check(
 
     quote! {
         match inp.get_current() {
-            #_None =>
-                return #_Err(#_ParseError {
-                    place: #rule.into(),
-                    reason: "Input is empty".into(),
-                }),
+            #_None => return #_Err(#_ParseError {
+                rule: #rule.into(),
+                input_location: inp.current,
+                reason: #_ParseErrorReason::UnexpectedEOI {
+                    expected: #_vec![#(#token_names),*],
+                },
+            }),
             #(#branches)*
-            #_Some(tok) =>
-                return #_Err(#_ParseError {
-                    place: #rule.into(),
-                    reason: "Unknown token".into(),
-                }),
+            #_Some(tok) => return #_Err(#_ParseError {
+                rule: #rule.into(),
+                input_location: inp.current,
+                reason: #_ParseErrorReason::UnexpectedToken {
+                    expected: #_vec![#(#token_names),*],
+                    token: tok.clone(),
+                }
+            })
         };
     }
 }

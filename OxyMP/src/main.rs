@@ -3,7 +3,7 @@ use std::rc::Rc;
 use oxymp::RecursiveDescent;
 use oxymp_util::{
     lexer::{DefaultTokenTier, LexRule, Lexer, LexerBuilder, TokenHandler, TokenMatcher},
-    parser::{ParseError, ParserInput, ParserState},
+    parser::{ParseError, ParseErrorReason, ParserInput, ParserState},
 };
 
 mod nested {

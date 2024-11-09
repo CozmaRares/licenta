@@ -35,10 +35,18 @@ where
         }
     }
 }
-pub type ParserState<Token, Value> = Result<(ParserInput<Token>, Value), ParseError>;
+pub type ParserState<Token, Value> = Result<(ParserInput<Token>, Value), ParseError<Token>>;
 
 #[derive(Debug)]
-pub struct ParseError {
-    pub place: String,
-    pub reason: String,
+pub enum ParseErrorReason<Token> {
+    UnexpectedEOI { expected: Vec<String> },
+    UnexpectedToken { expected: Vec<String>, token: Token },
+    AllChoicesFailed,
+}
+
+#[derive(Debug)]
+pub struct ParseError<Token> {
+    pub rule: String,
+    pub input_location: usize,
+    pub reason: ParseErrorReason<Token>,
 }
