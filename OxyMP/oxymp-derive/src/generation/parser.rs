@@ -134,8 +134,7 @@ fn expand_node(
         GrammarNodeContent::Choice(choices, choice_idx) => {
             let defs = choices
                 .iter()
-                .enumerate()
-                .map(|(idx, expr)| expand_node(rule, expr, rules, data, idx != 0))
+                .map(|expr| expand_node(rule, expr, rules, data, false))
                 .enumerate()
                 .map(|(idx, (toks, ident))| {
                     let idx_ident = parser::idx_ident(idx + 1);
