@@ -45,8 +45,38 @@ pub enum ParseErrorReason<Token> {
 }
 
 #[derive(Debug)]
-pub struct ParseError<Token> {
+pub struct ParseIssue<Token> {
     pub rule: String,
     pub input_location: usize,
     pub reason: ParseErrorReason<Token>,
+}
+
+#[derive(Debug)]
+pub enum ParseError<Token> {
+    Single(ParseIssue<Token>),
+    Multi(Vec<ParseIssue<Token>>),
+}
+
+impl<Token> ParseError<Token> {
+    pub fn new(
+        rule: String,
+        input_location: usize,
+        reason: ParseErrorReason<Token>,
+    ) -> ParseError<Token> {
+        ParseError::Single(ParseIssue {
+            rule,
+            input_location,
+            reason,
+        })
+    }
+
+    pub fn add_issue(self, new_issue: ParseIssue<Token>) -> ParseError<Token> {
+        match self {
+            ParseError::Single(issue) => ParseError::Multi(vec![issue, new_issue]),
+            ParseError::Multi(mut issues) => {
+                issues.push(new_issue);
+                ParseError::Multi(issues)
+            }
+        }
+    }
 }

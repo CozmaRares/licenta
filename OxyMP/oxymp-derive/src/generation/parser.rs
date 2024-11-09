@@ -98,23 +98,23 @@ fn expand_node(
 
             quote! {
                 let (inp, #node_ident) = match inp.get_current() {
-                    #_None => #_Err(#_ParseError {
-                        rule: #rule.into(),
-                        input_location: inp.current,
-                        reason: #_ParseErrorReason::UnexpectedEOI {
+                    #_None => #_Err(#_ParseError::new(
+                        #rule.into(),
+                        inp.current,
+                        #_ParseErrorReason::UnexpectedEOI {
                             expected: #_vec![#token_enum_entry_string.into()],
-                        },
-                    }),
+                        }
+                    )),
                     #_Some(Token::#token_enum_entry(tok)) =>
                         #_Ok((inp.increment(), tok.clone())),
-                    #_Some(tok) => #_Err(#_ParseError {
-                        rule: #rule.into(),
-                        input_location: inp.current,
-                        reason: #_ParseErrorReason::UnexpectedToken {
+                    #_Some(tok) => #_Err(#_ParseError::new (
+                        #rule.into(),
+                        inp.current,
+                        #_ParseErrorReason::UnexpectedToken {
                             expected: #_vec![#token_enum_entry_string.into()],
                             token: tok.clone(),
                         }
-                    })
+                    ))
                 }?;
             }
         }
@@ -169,11 +169,11 @@ fn expand_node(
                 let (inp, #node_ident) =  (|| {
                      #(#defs)*
 
-                    #_Err(#_ParseError {
-                        rule: #rule.into(),
-                        input_location: inp.current,
-                        reason: #_ParseErrorReason::AllChoicesFailed,
-                    })
+                    #_Err(#_ParseError::new(
+                        #rule.into(),
+                        inp.current,
+                        #_ParseErrorReason::AllChoicesFailed,
+                    ))
                 })()?;
             }
         }
@@ -326,22 +326,22 @@ fn generate_token_check(
 
     quote! {
         match inp.get_current() {
-            #_None => return #_Err(#_ParseError {
-                rule: #rule.into(),
-                input_location: inp.current,
-                reason: #_ParseErrorReason::UnexpectedEOI {
+            #_None => return #_Err(#_ParseError::new(
+                #rule.into(),
+                inp.current,
+                #_ParseErrorReason::UnexpectedEOI {
                     expected: #_vec![#(#token_names),*],
-                },
-            }),
+                }
+            )),
             #(#branches)*
-            #_Some(tok) => return #_Err(#_ParseError {
-                rule: #rule.into(),
-                input_location: inp.current,
-                reason: #_ParseErrorReason::UnexpectedToken {
+            #_Some(tok) => return #_Err(#_ParseError::new(
+                #rule.into(),
+                inp.current,
+                #_ParseErrorReason::UnexpectedToken {
                     expected: #_vec![#(#token_names),*],
                     token: tok.clone(),
                 }
-            })
+            ))
         };
     }
 }
