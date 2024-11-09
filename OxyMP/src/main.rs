@@ -29,6 +29,7 @@ mod nested {
 #[grammar = r"Int ::= Number | Minus Int"]
 #[grammar = r"Expr ::= Int ExprCont?"]
 #[grammar = r"ExprCont ::= ('+' | '-') Int ExprCont?"]
+#[grammar = r"I ::= Plus (Minus? Number)? Plus"]
 #[simple_types]
 #[depth_limit = 10]
 pub(crate) struct Parser;
@@ -72,9 +73,12 @@ impl Expr {
 fn main() {
     let l = create_lexer();
 
-    let a = l.tokenize("1 - -2 + 3").unwrap();
-    let a = Parser::Expr(a.into()).unwrap();
-    let a = a.1.eval();
-
+    let a = l.tokenize("+ 2 +").unwrap();
+    let a = Parser::I(a.into()).unwrap();
     println!("{:#?}", a);
+
+    //let a = l.tokenize("1 - -2 + 3").unwrap();
+    //let a = Parser::Expr(a.into()).unwrap();
+    //let a = a.1.eval();
+    //println!("{:#?}", a);
 }

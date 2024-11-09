@@ -191,18 +191,33 @@ fn expand_node(
     (toks, node_ident)
 }
 
-type CacheValue = Rc<HashSet<Rc<str>>>;
+type FirstTokens = HashSet<Rc<str>>;
+
+#[derive(Clone)]
+struct FirstCheck {
+    tokens: Rc<FirstTokens>,
+    nullable: bool,
+}
+
+impl FirstCheck {
+    fn nullable(self) -> FirstCheck {
+        FirstCheck {
+            tokens: self.tokens,
+            nullable: true,
+        }
+    }
+}
 
 thread_local! {
-    static NODE_FIRST_CACHE: RefCell<HashMap<*const GrammarNode, CacheValue>> = RefCell::new(HashMap::new());
-    static RULE_FIRST_CACHE: RefCell<HashMap<Rc<str>, CacheValue>> = RefCell::new(HashMap::new());
+    static NODE_FIRST_CACHE: RefCell<HashMap<*const GrammarNode, FirstCheck>> = RefCell::new(HashMap::new());
+    static RULE_FIRST_CACHE: RefCell<HashMap<Rc<str>, FirstCheck>> = RefCell::new(HashMap::new());
 }
 
 fn compute_rule_first(
     rule: Rc<str>,
     depth: usize,
     rules: &HashMap<Rc<str>, GrammarNode>,
-) -> Rc<HashSet<Rc<str>>> {
+) -> FirstCheck {
     if depth == 0 {
         panic!("Possible left recursion deteted! Reached depth limit when computing the first token for the rule: {}", rule);
     }
@@ -220,7 +235,7 @@ fn compute_node_first(
     node: &GrammarNode,
     depth: usize,
     rules: &HashMap<Rc<str>, GrammarNode>,
-) -> Rc<HashSet<Rc<str>>> {
+) -> FirstCheck {
     if let Some(cached) =
         NODE_FIRST_CACHE.with(|c| c.borrow().get(&(node as *const GrammarNode)).cloned())
     {
@@ -229,19 +244,47 @@ fn compute_node_first(
 
     let computed = match &node.content {
         GrammarNodeContent::Rule(rule) => compute_rule_first(rule.clone(), depth - 1, rules),
-        GrammarNodeContent::Token(token) => {
-            pipe!([token.clone()] => HashSet::from => Rc::new)
+        GrammarNodeContent::Token(token) => FirstCheck {
+            tokens: pipe!([token.clone()] => HashSet::from => Rc::new),
+            nullable: false,
+        },
+        GrammarNodeContent::List(list) => {
+            let mut firsts = HashSet::new();
+            let mut nullable = true;
+
+            for list_node in list {
+                let first = compute_node_first(list_node, depth, rules);
+
+                firsts.extend(<HashSet<Rc<str>> as Clone>::clone(&first.tokens).into_iter());
+
+                if !first.nullable {
+                    nullable = false;
+                    break;
+                }
+            }
+
+            FirstCheck {
+                tokens: pipe!(firsts => Rc::new),
+                nullable,
+            }
         }
-        GrammarNodeContent::List(list) => compute_node_first(list.first().unwrap(), depth, rules),
-        GrammarNodeContent::Optional(opt) => compute_node_first(opt, depth, rules),
+        GrammarNodeContent::Optional(opt) => compute_node_first(opt, depth, rules).nullable(),
         GrammarNodeContent::Choice(choices, _) => {
-            let firsts: HashSet<_> = choices
+            let mut choices = choices
                 .iter()
-                .map(|choice| compute_node_first(choice, depth, rules))
-                .flat_map(|choice| choice.iter().cloned().collect::<Vec<_>>())
+                .map(|choice| compute_node_first(choice, depth, rules));
+
+            let firsts: HashSet<_> = choices
+                .clone()
+                .flat_map(|choice| choice.tokens.iter().cloned().collect::<Vec<_>>())
                 .collect();
 
-            pipe!(firsts => Rc::new)
+            let nullable = choices.any(|choice| choice.nullable);
+
+            FirstCheck {
+                tokens: pipe!(firsts => Rc::new),
+                nullable,
+            }
         }
     };
 
@@ -254,11 +297,11 @@ fn compute_node_first(
 
 fn generate_token_check(
     rule: &str,
-    first: &HashSet<Rc<str>>,
+    check: &FirstCheck,
     simple_types: bool,
     needs_check: bool,
 ) -> TokenStream {
-    if !needs_check {
+    if !needs_check || check.nullable {
         return quote! {};
     }
 
@@ -267,7 +310,8 @@ fn generate_token_check(
     let _Err = get_def(Symbol::Err, simple_types);
     let _ParseError = get_def(Symbol::UtilParseError, simple_types);
 
-    let branches = first
+    let branches = check
+        .tokens
         .iter()
         .map(|token| tokens::enum_ident(token))
         .map(|ident| quote! { #_Some(Token::#ident(_)) => {} });
