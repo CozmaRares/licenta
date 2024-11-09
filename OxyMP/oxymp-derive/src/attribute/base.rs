@@ -137,7 +137,7 @@ pub fn fit_attribute_list(
 
     let ident = parsed.attribute_ident.to_string();
 
-    if ident.to_string() != *expected_attribute {
+    if ident != *expected_attribute {
         return Err(syn::Error::new(
             parsed.attribute_ident.span(),
             format!(
@@ -189,7 +189,7 @@ pub fn fit_attribute_list(
             continue;
         }
 
-        if !found_properties.contains(&*expected_property.0) {
+        if !found_properties.contains(expected_property.0) {
             return Err(syn::Error::new(
                 parsed.attribute_ident.span(),
                 format!("Missing property: {}", expected_property.0),
@@ -213,19 +213,6 @@ macro_rules! get_str {
                 lit: syn::Lit::Str(name),
                 ..
             })) => name,
-            _ => unreachable!(),
-        }
-    };
-}
-
-macro_rules! get_str_opt {
-    ($val:expr) => {
-        match $val {
-            None => None,
-            Some(syn::Expr::Lit(syn::ExprLit {
-                lit: syn::Lit::Str(name),
-                ..
-            })) => Some(name),
             _ => unreachable!(),
         }
     };

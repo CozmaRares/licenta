@@ -88,5 +88,5 @@ pub fn parse_depth_limit_attr(input: proc_macro2::TokenStream) -> syn::Result<us
     if &*key != "depth_limit" {
         return Err(syn::Error::new(key_ident.span(), "Wrong attribute"));
     }
-    Ok(value.base10_parse()?)
+    value.base10_parse()
 }

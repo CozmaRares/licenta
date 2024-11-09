@@ -38,7 +38,7 @@ impl Int {
     fn eval(&self) -> i64 {
         match &self.0 {
             IntChoice1::_1(TokenNumber(n)) => **n,
-            IntChoice1::_2((_, e)) => -1 * e.eval(),
+            IntChoice1::_2((_, e)) => -e.eval(),
         }
     }
 }

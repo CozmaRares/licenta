@@ -160,10 +160,19 @@ where
 
         let rules = rules
             .into_iter()
-            .map(|(_, rules)| rules)
-            .flatten()
+            .flat_map(|(_, rules)| rules)
             .collect();
 
         Lexer { rules }
+    }
+}
+
+impl<Token, Tier> Default for LexerBuilder<Token, Tier>
+where
+    Token: std::fmt::Debug + Clone,
+    Tier: std::hash::Hash + Ord + Default,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }

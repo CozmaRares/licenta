@@ -33,11 +33,11 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
 
     let builder_tokens = if has_tier {
         quote! {
-            #_LexerBuilder::new()
+            #_LexerBuilder::default()
         }
     } else {
         quote! {
-            #_LexerBuilder::<Token>::new()
+            #_LexerBuilder::<Token>::default()
         }
     };
 
@@ -50,13 +50,10 @@ pub fn generate_constructor(data: &MacroData) -> proc_macro2::TokenStream {
     }
 }
 
-fn generate_rule<'a>(
-    tok: &'a TokenInfo,
+fn generate_rule(
+    tok: &TokenInfo,
     simple: bool,
-) -> (
-    &'a Option<proc_macro2::TokenStream>,
-    proc_macro2::TokenStream,
-) {
+) -> (&Option<proc_macro2::TokenStream>, proc_macro2::TokenStream) {
     let _Rc = get_def(Symbol::Rc, simple);
     let _Box = get_def(Symbol::Box, simple);
     let _LexRule = get_def(Symbol::UtilLexRule, simple);
