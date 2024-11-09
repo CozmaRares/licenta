@@ -93,7 +93,7 @@ impl<Token> Lexer<Token>
 where
     Token: std::fmt::Debug + Clone,
 {
-    pub fn tokenize(self, mut input: &str) -> Result<Vec<Token>, LexError> {
+    pub fn tokenize<'a>(&'a self, mut input: &'a str) -> Result<Vec<Token>, LexError> {
         let mut tokens = Vec::new();
         while !input.is_empty() {
             let mut was_consumed = false;

@@ -77,8 +77,8 @@ fn main() {
     let a = Parser::I(a.into()).unwrap();
     println!("{:#?}", a);
 
-    //let a = l.tokenize("1 - -2 + 3").unwrap();
-    //let a = Parser::Expr(a.into()).unwrap();
-    //let a = a.1.eval();
-    //println!("{:#?}", a);
+    let a = l.tokenize("1 - -2 + 3").unwrap();
+    let a = Parser::Expr(a.into()).unwrap();
+    let a = a.1.eval();
+    println!("{:#?}", a);
 }
