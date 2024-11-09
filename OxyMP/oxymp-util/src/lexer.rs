@@ -16,12 +16,14 @@ impl TokenMatcher {
     }
 }
 
+type TransformerFn<Token> = dyn Fn(&str) -> Result<Token, LexError>;
+
 pub enum TokenHandler<Token>
 where
     Token: std::fmt::Debug,
 {
     Pattern(Token),
-    Regex(Box<dyn Fn(&str) -> Result<Token, LexError>>),
+    Regex(Box<TransformerFn<Token>>),
     Ignore,
 }
 
