@@ -70,7 +70,18 @@ impl<Token> ParseError<Token> {
         })
     }
 
-    pub fn add_issue(self, new_issue: ParseIssue<Token>) -> ParseError<Token> {
+    pub fn add_issue(
+        self,
+        rule: String,
+        input_location: usize,
+        reason: ParseErrorReason<Token>,
+    ) -> ParseError<Token> {
+        let new_issue = ParseIssue {
+            rule,
+            input_location,
+            reason,
+        };
+
         match self {
             ParseError::Single(issue) => ParseError::Multi(vec![issue, new_issue]),
             ParseError::Multi(mut issues) => {
