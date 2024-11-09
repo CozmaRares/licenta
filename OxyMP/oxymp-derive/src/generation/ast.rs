@@ -28,7 +28,7 @@ pub(crate) fn generate_ast(data: &MacroData, rules: &HashMap<Rc<str>, GrammarNod
             Some(structs) => quote! { #(#structs)* },
         };
 
-        let rule_ident = parser::rule_ident(rule);
+        let rule_ident = parser::rule_struct_ident(rule);
 
         quote! {
             #external_choices
@@ -58,7 +58,7 @@ fn generate_ast_node(rule: &str, node: &GrammarNode, data: &MacroData) -> ASTNod
 
     match &node.content {
         GrammarNodeContent::Rule(rule) => {
-            let ident = parser::rule_ident(rule);
+            let ident = parser::rule_struct_ident(rule);
             ASTNode {
                 main_struct: quote! {#_Box<#ident>},
                 external_choices: None,

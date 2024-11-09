@@ -38,7 +38,8 @@ fn generate_rule(
 ) -> TokenStream {
     let visibility = &data.visibility;
 
-    let rule_ident = parser::rule_ident(rule);
+    let method_ident = parser::rule_method_ident(rule);
+    let struct_ident = parser::rule_struct_ident(rule);
     let defs = expand_node(rule, node, rules, data, false);
     let toks = defs.0;
     let ident = defs.1;
@@ -48,11 +49,11 @@ fn generate_rule(
     let _ParserState = get_def(Symbol::UtilParserState, data.simple_types);
 
     quote! {
-        #visibility fn #rule_ident(inp: #_ParserInput<Token>) -> #_ParserState<Token, #rule_ident> {
+        #visibility fn #method_ident(inp: #_ParserInput<Token>) -> #_ParserState<Token, #struct_ident> {
             #toks
             #_Ok((
                 inp,
-                #rule_ident(#ident)
+                #struct_ident(#ident)
             ))
         }
     }
@@ -78,7 +79,7 @@ fn expand_node(
 
     let toks = match &node.content {
         GrammarNodeContent::Rule(nested_rule) => {
-            let rule_ident = parser::rule_ident(nested_rule);
+            let rule_ident = parser::rule_method_ident(nested_rule);
             let dir_set = compute_dir_set(nested_rule, node, data.depth_limit, rules);
             let check = generate_token_check(rule, &dir_set, data.simple_types, needs_check);
 

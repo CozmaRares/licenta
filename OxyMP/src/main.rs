@@ -7,7 +7,7 @@ use oxymp_util::{
 };
 
 mod nested {
-    pub type Int = i64;
+    pub type Integer = i64;
 
     pub fn match_number(matched: &str) -> i64 {
         matched.parse().unwrap()
@@ -23,22 +23,21 @@ mod nested {
     name = "Number",
     regex = r"[0-9]+",
     transformer_fn = nested::match_number,
-    kind = nested::Int
+    kind = nested::Integer
 )]
 #[ignore_pattern(regex = r"\s+")]
-#[grammar = r"Int ::= Number | Minus Int"]
-#[grammar = r"Expr ::= Int ExprCont?"]
-#[grammar = r"ExprCont ::= ('+' | '-') Int ExprCont?"]
-#[grammar = r"I ::= Plus (Minus? Number)? Plus"]
+#[grammar = r"Integer ::= Number | Minus Integer"]
+#[grammar = r"Expr ::= Integer ExprCont?"]
+#[grammar = r"ExprCont ::= ('+' | '-') Integer ExprCont?"]
 #[simple_types]
 #[depth_limit = 10]
 pub(crate) struct Parser;
 
-impl Int {
+impl Integer {
     fn eval(&self) -> i64 {
         match &self.0 {
-            IntChoice1::_1(TokenNumber(n)) => **n,
-            IntChoice1::_2((_, e)) => -e.eval(),
+            IntegerChoice1::_1(TokenNumber(n)) => **n,
+            IntegerChoice1::_2((_, e)) => -e.eval(),
         }
     }
 }
@@ -73,12 +72,8 @@ impl Expr {
 fn main() {
     let l = create_lexer();
 
-    let a = l.tokenize("+ 2 +").unwrap();
-    let a = Parser::I(a.into()).unwrap();
-    println!("{:#?}", a);
-
     let a = l.tokenize("1 - -2 + 3").unwrap();
-    let a = Parser::Expr(a.into()).unwrap();
+    let a = Parser::expr(a.into()).unwrap();
     let a = a.1.eval();
     println!("{:#?}", a);
 }
