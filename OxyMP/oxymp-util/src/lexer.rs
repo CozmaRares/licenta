@@ -21,7 +21,7 @@ where
     Token: std::fmt::Debug,
 {
     Pattern(Token),
-    Regex(Box<dyn Fn(&str) -> Token>),
+    Regex(Box<dyn Fn(&str) -> Result<Token, LexError>>),
     Ignore,
 }
 
@@ -63,22 +63,32 @@ where
         }
     }
 
-    pub fn consume<'a>(&self, input: &'a str) -> Option<(Option<Token>, &'a str)> {
-        self.matches(input).map(|matched_size| {
-            let token = match &self.handler {
-                TokenHandler::Ignore => None,
-                TokenHandler::Pattern(t) => Some(t.clone()),
-                TokenHandler::Regex(f) => Some(f(&input[..matched_size])),
-            };
-            Some((token, &input[matched_size..]))
-        })?
+    pub fn consume<'a>(
+        &self,
+        input: &'a str,
+    ) -> Option<Result<(Option<Token>, &'a str), LexError<'a>>> {
+        let matched_size = match self.matches(input) {
+            Some(s) => s,
+            None => return None,
+        };
+
+        let token = match &self.handler {
+            TokenHandler::Ignore => None,
+            TokenHandler::Pattern(t) => Some(t.clone()),
+            TokenHandler::Regex(f) => match f(&input[..matched_size]) {
+                Ok(t) => Some(t),
+                Err(e) => return Some(Err(e)),
+            },
+        };
+
+        Some(Ok((token, &input[matched_size..])))
     }
 }
 
 #[derive(Debug)]
-pub struct LexError<'a> {
-    pub input: &'a str,
-    pub message: String,
+pub enum LexError<'a> {
+    UnknownPattern(&'a str),
+    UnparsableToken(&'a str),
 }
 
 #[derive(Debug)]
@@ -93,12 +103,13 @@ impl<Token> Lexer<Token>
 where
     Token: std::fmt::Debug + Clone,
 {
-    pub fn tokenize<'a>(&'a self, mut input: &'a str) -> Result<Vec<Token>, LexError> {
+    pub fn tokenize<'a>(&'a self, mut input: &'a str) -> Result<Vec<Token>, LexError<'a>> {
         let mut tokens = Vec::new();
         while !input.is_empty() {
             let mut was_consumed = false;
             for rule in &self.rules {
-                if let Some((token, remaining)) = rule.consume(input) {
+                if let Some(result) = rule.consume(input) {
+                    let (token, remaining) = result?;
                     if let Some(token) = token {
                         tokens.push(token);
                     }
@@ -108,10 +119,7 @@ where
                 }
             }
             if !was_consumed {
-                return Err(LexError {
-                    input,
-                    message: "Unknown token".to_string(),
-                });
+                return Err(LexError::UnknownPattern(input));
             }
         }
         Ok(tokens)
@@ -158,10 +166,7 @@ where
         let mut rules: Vec<_> = self.rules.into_iter().collect();
         rules.sort_by(|(key1, _), (key2, _)| key1.cmp(key2));
 
-        let rules = rules
-            .into_iter()
-            .flat_map(|(_, rules)| rules)
-            .collect();
+        let rules = rules.into_iter().flat_map(|(_, rules)| rules).collect();
 
         Lexer { rules }
     }

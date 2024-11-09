@@ -7,10 +7,14 @@ use oxymp_util::{
 };
 
 mod nested {
+    use oxymp_util::lexer::LexError;
+
     pub type Integer = i64;
 
-    pub fn match_number(matched: &str) -> i64 {
-        matched.parse().unwrap()
+    pub fn match_number(matched: &str) -> Result<i64, LexError> {
+        matched
+            .parse()
+            .map_err(|_| LexError::UnparsableToken(matched))
     }
 }
 

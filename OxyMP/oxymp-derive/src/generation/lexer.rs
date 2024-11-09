@@ -96,7 +96,7 @@ fn generate_rule(
                         matcher: #_TokenMatcher::regex(#regex),
                         handler: #_TokenHandler::Regex(
                             #_Box::new(
-                                |matched| Token::#enum_ident(#struct_ident(#_Rc::new(#transformer_fn(matched))))
+                                |matched| #transformer_fn(matched).map(|t| Token::#enum_ident(#struct_ident(#_Rc::new(t))))
                             )
                         )
                     }
