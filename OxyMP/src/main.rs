@@ -19,11 +19,11 @@ mod nested {
 }
 
 #[derive(RecursiveDescent)]
-#[exact_token(name = "ParanLeft", pattern = "(", tier = DefaultTokenTier::Low)]
-#[exact_token(name = "ParanRight", pattern = ")", tier = DefaultTokenTier::Medium)]
-#[exact_token(name = "Plus", pattern = "+", tier = DefaultTokenTier::High)]
-#[exact_token(name = "Minus", pattern = "-")]
-#[regex_token(
+#[exact_pattern(name = "ParanLeft", pattern = "(", tier = DefaultTokenTier::Low)]
+#[exact_pattern(name = "ParanRight", pattern = ")", tier = DefaultTokenTier::Medium)]
+#[exact_pattern(name = "Plus", pattern = "+", tier = DefaultTokenTier::High)]
+#[exact_pattern(name = "Minus", pattern = "-")]
+#[regex_pattern(
     name = "Number",
     regex = r"[0-9]+",
     transformer_fn = nested::match_number,

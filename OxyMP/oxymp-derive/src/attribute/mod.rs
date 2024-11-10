@@ -8,15 +8,15 @@ use quote::ToTokens;
 use crate::tokens::{ExactToken, IgnorePattern, RegexToken, TokenInfo};
 use base::*;
 
-//#[exact_token(name = "Minus", pattern = "-")]
-//#[exact_token(name = "Minus", pattern = "-", tier = Tier::Level)]
-pub fn parse_exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
+//#[exact_pattern(name = "Minus", pattern = "-")]
+//#[exact_pattern(name = "Minus", pattern = "-", tier = Tier::Level)]
+pub fn parse_exact_pattern(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
     let mut expected_properties = HashMap::new();
     expected_properties.insert("name", ExpectedProperty::new(PropertyType::LitStr));
     expected_properties.insert("pattern", ExpectedProperty::new(PropertyType::LitStr));
     expected_properties.insert("tier", ExpectedProperty::new(PropertyType::Path).optional());
 
-    let mut attr = fit_attribute_list(tokens, "exact_token", expected_properties)?;
+    let mut attr = fit_attribute_list(tokens, "exact_pattern", expected_properties)?;
     let name = get_str!(attr.remove("name")).value().into();
     let pattern = get_str!(attr.remove("pattern")).value().into();
     let tier = get_path_opt!(attr.remove("tier")).map(|path| path.into_token_stream());
@@ -27,9 +27,9 @@ pub fn parse_exact_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenI
         tier,
     }))
 }
-//#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64")]
-//#[regex_token(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64", tier = Tier::Level)]
-pub fn parse_regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
+//#[regex_pattern(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64")]
+//#[regex_pattern(name = "Number", regex = r"-?[0-9]+", transformer_fn = "match_number", kind = "i64", tier = Tier::Level)]
+pub fn parse_regex_pattern(tokens: proc_macro2::TokenStream) -> syn::Result<TokenInfo> {
     let mut expected_properties = HashMap::new();
     expected_properties.insert("name", ExpectedProperty::new(PropertyType::LitStr));
     expected_properties.insert("regex", ExpectedProperty::new(PropertyType::LitStr));
@@ -37,7 +37,7 @@ pub fn parse_regex_token(tokens: proc_macro2::TokenStream) -> syn::Result<TokenI
     expected_properties.insert("kind", ExpectedProperty::new(PropertyType::Path));
     expected_properties.insert("tier", ExpectedProperty::new(PropertyType::Path).optional());
 
-    let mut attr = fit_attribute_list(tokens, "regex_token", expected_properties)?;
+    let mut attr = fit_attribute_list(tokens, "regex_pattern", expected_properties)?;
     let name = get_str!(attr.remove("name")).value().into();
     let regex = get_str!(attr.remove("regex")).value().into();
     let transformer_fn = get_path!(attr.remove("transformer_fn")).into_token_stream();
@@ -89,4 +89,25 @@ pub fn parse_depth_limit_attr(input: proc_macro2::TokenStream) -> syn::Result<us
         return Err(syn::Error::new(key_ident.span(), "Wrong attribute"));
     }
     value.base10_parse()
+}
+
+// #[simple_types]
+pub fn parse_simple_types_attr(input: proc_macro2::TokenStream) -> syn::Result<()> {
+    let attr: Attribute<syn::Ident> = syn::parse2(input)?;
+    let attr_str = attr.0.to_string();
+    match &*attr_str == "simple_types" {
+        false => Err(syn::Error::new(attr.0.span(), "Wrong attribute")),
+        true => Ok(()),
+    }
+}
+
+// #[sync_token = "Number"]
+pub fn parse_sync_token_attr(input: proc_macro2::TokenStream) -> syn::Result<String> {
+    let kv: Attribute<KeyValue<syn::LitStr>> = syn::parse2(input)?;
+    let Attribute(KeyValue { key_ident, value }) = kv;
+    let key = key_ident.to_string();
+    if &*key != "sync_token" {
+        return Err(syn::Error::new(key_ident.span(), "Wrong attribute"));
+    }
+    Ok(value.value())
 }
