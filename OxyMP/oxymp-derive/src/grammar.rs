@@ -3,10 +3,10 @@ use std::{collections::HashMap, rc::Rc};
 use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, tag},
-    character::complete::{alpha1, char, multispace0, none_of},
-    combinator::{eof, opt, value},
-    multi::{many1, separated_list1},
-    sequence::delimited,
+    character::complete::{alpha1, alphanumeric1, char, multispace0, none_of},
+    combinator::{eof, opt, recognize, value},
+    multi::{many0, many1, separated_list1},
+    sequence::{delimited, pair},
     IResult,
 };
 
@@ -241,9 +241,12 @@ fn grammar_rule(input: &str) -> IResult<&str, RawGrammarRule> {
 
     Ok((input, RawGrammarRule { name: inner, rule }))
 }
+pub fn identifier(input: &str) -> IResult<&str, &str> {
+    recognize(pair(alpha1, many0(alt((alphanumeric1, tag("_"))))))(input)
+}
 
 fn name(input: &str) -> IResult<&str, RawGrammarNode> {
-    let (input, matched) = ws(alpha1)(input)?;
+    let (input, matched) = ws(identifier)(input)?;
     Ok((input, RawGrammarNode::Name(matched.into())))
 }
 
