@@ -152,6 +152,7 @@ fn expand_node(
 
                     quote! {
                         let r: #_ParserState<_, _> = (|| {
+                            let inp = inp.clone();
                             #toks
                             #_Ok((inp, #ident))
                         })();
@@ -167,7 +168,7 @@ fn expand_node(
             quote! {
                 #check
                 let (inp, #node_ident) =  (|| {
-                     #(#defs)*
+                    #(#defs)*
 
                     #_Err(#_ParseError::new(
                         #rule.into(),
