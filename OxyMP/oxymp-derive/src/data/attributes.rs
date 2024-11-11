@@ -3,30 +3,35 @@ use std::collections::HashMap;
 use quote::ToTokens;
 
 pub struct MacroAttributes {
-    pub exact_patterns: Vec<proc_macro2::TokenStream>,
-    pub regex_patterns: Vec<proc_macro2::TokenStream>,
-    pub ignore_patterns: Vec<proc_macro2::TokenStream>,
+    pub exact_patterns: Vec<(usize,proc_macro2::TokenStream)>,
+    pub regex_patterns: Vec<(usize,proc_macro2::TokenStream)>,
+    pub ignore_patterns: Vec<(usize,proc_macro2::TokenStream)>,
     pub grammar: Vec<proc_macro2::TokenStream>,
     pub simple_types: Option<proc_macro2::TokenStream>,
     pub depth_limit: Option<proc_macro2::TokenStream>,
     pub sync_tokens: Option<Vec<proc_macro2::TokenStream>>,
 }
 
-fn group_attrs(attrs: &[syn::Attribute]) -> HashMap<String, Vec<proc_macro2::TokenStream>> {
-    attrs.iter().fold(HashMap::new(), |mut acc, attr| {
-        let attr_ident = attr.path().segments.first().unwrap().ident.to_string();
+fn group_attrs(
+    attrs: &[syn::Attribute],
+) -> HashMap<String, Vec<(usize, proc_macro2::TokenStream)>> {
+    attrs
+        .iter()
+        .enumerate()
+        .fold(HashMap::new(), |mut acc, (idx, attr)| {
+            let attr_ident = attr.path().segments.first().unwrap().ident.to_string();
 
-        acc.entry(attr_ident)
-            .or_default()
-            .extend(vec![attr.to_token_stream()]);
+            acc.entry(attr_ident)
+                .or_default()
+                .extend(vec![(idx, attr.to_token_stream())]);
 
-        acc
-    })
+            acc
+        })
 }
 
 fn from_map(
     ast_span: proc_macro2::Span,
-    mut attributes: HashMap<String, Vec<proc_macro2::TokenStream>>,
+    mut attributes: HashMap<String, Vec<(usize, proc_macro2::TokenStream)>>,
 ) -> syn::Result<MacroAttributes> {
     let exact_patterns = attributes.remove("exact_pattern").unwrap_or_default();
     let regex_patterns = attributes.remove("regex_pattern").unwrap_or_default();
@@ -39,7 +44,10 @@ fn from_map(
     let grammar = match attributes.remove("grammar") {
         Some(v) => v,
         None => return Err(syn::Error::new(ast_span, "Missing grammar rules.")),
-    };
+    }
+    .into_iter()
+    .map(|item| item.1)
+    .collect();
 
     let simple_types = match attributes.remove("simple_types") {
         None => None,
@@ -53,7 +61,8 @@ fn from_map(
                 ))
             }
         },
-    };
+    }
+    .map(|item| item.1);
 
     let depth_limit = match attributes.remove("depth_limit") {
         None => None,
@@ -67,9 +76,12 @@ fn from_map(
                 ))
             }
         },
-    };
+    }
+    .map(|item| item.1);
 
-    let sync_tokens = attributes.remove("sync_tokens");
+    let sync_tokens = attributes
+        .remove("sync_tokens")
+        .map(|v| v.into_iter().map(|item| item.1).collect());
 
     if !attributes.is_empty() {
         return Err(syn::Error::new(
