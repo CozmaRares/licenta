@@ -100,14 +100,3 @@ pub fn parse_simple_types_attr(input: proc_macro2::TokenStream) -> syn::Result<(
         true => Ok(()),
     }
 }
-
-// #[sync_token = "Number"]
-pub fn parse_sync_token_attr(input: proc_macro2::TokenStream) -> syn::Result<String> {
-    let kv: Attribute<KeyValue<syn::LitStr>> = syn::parse2(input)?;
-    let Attribute(KeyValue { key_ident, value }) = kv;
-    let key = key_ident.to_string();
-    if &*key != "sync_token" {
-        return Err(syn::Error::new(key_ident.span(), "Wrong attribute"));
-    }
-    Ok(value.value())
-}

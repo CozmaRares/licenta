@@ -93,6 +93,8 @@ pub enum LexError<'a> {
     UnparsableToken(&'a str),
 }
 
+pub type LexResult<'a, T> = Result<T, LexError<'a>>;
+
 #[derive(Debug)]
 pub struct Lexer<Token>
 where

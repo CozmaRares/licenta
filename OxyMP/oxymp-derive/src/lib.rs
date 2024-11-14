@@ -64,7 +64,6 @@ fn derive_impl(input: proc_macro::TokenStream) -> syn::Result<proc_macro2::Token
         grammar,
         simple_types,
         depth_limit,
-        sync_tokens
     )
 )]
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

@@ -9,7 +9,6 @@ pub struct MacroAttributes {
     pub grammar: Vec<proc_macro2::TokenStream>,
     pub simple_types: Option<proc_macro2::TokenStream>,
     pub depth_limit: Option<proc_macro2::TokenStream>,
-    pub sync_tokens: Option<Vec<proc_macro2::TokenStream>>,
 }
 
 fn group_attrs(
@@ -79,10 +78,6 @@ fn from_map(
     }
     .map(|item| item.1);
 
-    let sync_tokens = attributes
-        .remove("sync_tokens")
-        .map(|v| v.into_iter().map(|item| item.1).collect());
-
     if !attributes.is_empty() {
         return Err(syn::Error::new(
             ast_span,
@@ -102,7 +97,6 @@ fn from_map(
         grammar,
         simple_types,
         depth_limit,
-        sync_tokens,
     })
 }
 
