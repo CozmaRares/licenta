@@ -16,23 +16,17 @@ pub fn generate_tokens(data: &MacroData) -> proc_macro2::TokenStream {
 
     let idents = token_info.iter().filter_map(generate_token_idents);
 
-    let enum_entries = idents.clone().map(|(enum_entry, struct_ident, _)| {
-        quote! {
-            #enum_entry(#struct_ident)
-        }
-    });
-
-    let _Rc = get_def(Symbol::Rc, data.simple_types);
     let _Debug = get_def(Symbol::DeriveDebug, data.simple_types);
     let _Clone = get_def(Symbol::DeriveClone, data.simple_types);
 
     let structs = idents
+        .clone()
         .map(|idents| match idents {
             (_, struct_ident, None) => quote! {
                 #visibility struct #struct_ident;
             },
             (_, struct_ident, Some(kind_ident)) => quote! {
-                #visibility struct #struct_ident(#visibility #_Rc<#kind_ident>);
+                #visibility struct #struct_ident(#visibility #kind_ident);
             },
         })
         .map(|struct_def| {
@@ -41,6 +35,12 @@ pub fn generate_tokens(data: &MacroData) -> proc_macro2::TokenStream {
                 #struct_def
             }
         });
+
+    let enum_entries = idents.map(|(enum_entry, struct_ident, _)| {
+        quote! {
+            #enum_entry(#struct_ident)
+        }
+    });
 
     quote! {
         #(#structs)*

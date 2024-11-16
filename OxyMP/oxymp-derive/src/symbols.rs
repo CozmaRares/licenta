@@ -18,7 +18,6 @@ pub enum Symbol {
     Some,
 
     Box,
-    Rc,
 
     VecMacro,
 
@@ -52,7 +51,6 @@ lazy_static! {
         m.insert(Symbol::Some,   (&["std", "option", "Option"][..], "Some"  ));
 
         m.insert(Symbol::Box,    (&["std", "boxed" ][..], "Box"   ));
-        m.insert(Symbol::Rc,     (&["std", "rc"    ][..], "Rc"    ));
 
         m.insert(Symbol::VecMacro,    (&["std"][..], "vec")   );
 

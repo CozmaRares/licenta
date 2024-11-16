@@ -16,14 +16,39 @@ impl TokenMatcher {
     }
 }
 
-type TransformerFn<Token> = dyn Fn(&str) -> Result<Token, LexError>;
+#[derive(Debug)]
+pub struct LexerState<'a> {
+    input: &'a str,
+    cursor: usize,
+}
+
+impl<'a> LexerState<'a> {
+    fn advance(&mut self, n: usize) {
+        self.cursor += n;
+    }
+
+    fn remaining(&self) -> &'a str {
+        &self.input[self.cursor..]
+    }
+
+    fn has_remaining(&self) -> bool {
+        self.cursor < self.input.len()
+    }
+
+    pub fn current_n(&self, n: usize) -> &'a str {
+        &self.input[self.cursor..self.cursor + n]
+    }
+}
+
+type TokenCreatorFn<Token> = dyn Fn(&LexerState, usize) -> Token;
+type TokenTransformerFn<Token> = dyn Fn(&LexerState, usize) -> Result<Token, LexError>;
 
 pub enum TokenHandler<Token>
 where
     Token: std::fmt::Debug,
 {
-    Pattern(Token),
-    Regex(Box<TransformerFn<Token>>),
+    Pattern(Box<TokenCreatorFn<Token>>),
+    Regex(Box<TokenTransformerFn<Token>>),
     Ignore,
 }
 
@@ -33,7 +58,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TokenHandler::Pattern(token) => f.debug_tuple("Pattern").field(token).finish(),
+            TokenHandler::Pattern(_) => f.debug_tuple("Pattern").finish(),
             TokenHandler::Regex(_) => f.debug_tuple("Regex").finish(),
             TokenHandler::Ignore => f.debug_tuple("Ignore").finish(),
         }
@@ -43,87 +68,96 @@ where
 #[derive(Debug)]
 pub struct LexRule<Token>
 where
-    Token: std::fmt::Debug + Clone,
+    Token: std::fmt::Debug,
 {
-    pub matcher: TokenMatcher,
-    pub handler: TokenHandler<Token>,
+    matcher: TokenMatcher,
+    handler: TokenHandler<Token>,
 }
 
 impl<Token> LexRule<Token>
 where
-    Token: std::fmt::Debug + Clone,
+    Token: std::fmt::Debug,
 {
-    fn matches(&self, input: &str) -> Option<usize> {
+    pub fn new(matcher: TokenMatcher, handler: TokenHandler<Token>) -> Self {
+        LexRule { matcher, handler }
+    }
+
+    fn matches(&self, state: &LexerState) -> Option<usize> {
         match &self.matcher {
-            TokenMatcher::Exact(exact_match) => {
-                input.starts_with(exact_match).then_some(exact_match.len())
-            }
+            TokenMatcher::Exact(exact_match) => state
+                .remaining()
+                .starts_with(exact_match)
+                .then_some(exact_match.len()),
             TokenMatcher::Regex(re) => re
-                .captures(input)
+                .captures(state.remaining())
                 .and_then(|captures| captures.get(0))
                 .map(|matched| matched.end() - matched.start()),
         }
     }
 
-    pub fn consume<'a>(
-        &self,
-        input: &'a str,
-    ) -> Option<Result<(Option<Token>, &'a str), LexError<'a>>> {
-        let matched_size = match self.matches(input) {
-            Some(s) => s,
-            None => return None,
-        };
-
-        let token = match &self.handler {
-            TokenHandler::Ignore => None,
-            TokenHandler::Pattern(t) => Some(t.clone()),
-            TokenHandler::Regex(f) => match f(&input[..matched_size]) {
-                Ok(t) => Some(t),
-                Err(e) => return Some(Err(e)),
-            },
-        };
-
-        Some(Ok((token, &input[matched_size..])))
+    fn consume(&self, state: &LexerState, matched_size: usize) -> Result<Option<Token>, LexError> {
+        match &self.handler {
+            TokenHandler::Ignore => Ok(None),
+            TokenHandler::Pattern(f) => Ok(Some(f(state, matched_size))),
+            TokenHandler::Regex(f) => f(state, matched_size).map(|t| Some(t)),
+        }
     }
 }
 
 #[derive(Debug)]
-pub enum LexError<'a> {
-    UnknownPattern(&'a str),
-    UnparsableToken(&'a str),
+pub enum LexError {
+    UnknownPattern(String),
+    UnparsableToken(String),
 }
 
-pub type LexResult<'a, T> = Result<T, LexError<'a>>;
+impl LexError {
+    fn unknown(input: &str) -> LexError {
+        LexError::UnknownPattern(input.into())
+    }
+
+    pub fn unparsable(input: &str) -> LexError {
+        LexError::UnparsableToken(input.into())
+    }
+}
+
+pub type LexResult<T> = Result<T, LexError>;
 
 #[derive(Debug)]
 pub struct Lexer<Token>
 where
-    Token: std::fmt::Debug + Clone,
+    Token: std::fmt::Debug,
 {
     pub rules: Vec<LexRule<Token>>,
 }
 
 impl<Token> Lexer<Token>
 where
-    Token: std::fmt::Debug + Clone,
+    Token: std::fmt::Debug,
 {
-    pub fn tokenize<'a>(&'a self, mut input: &'a str) -> Result<Vec<Token>, LexError<'a>> {
+    pub fn tokenize<'a>(&'a self, input: &'a str) -> Result<Vec<Token>, LexError> {
         let mut tokens = Vec::new();
-        while !input.is_empty() {
+        let mut state = LexerState { input, cursor: 0 };
+
+        while state.has_remaining() {
             let mut was_consumed = false;
+
             for rule in &self.rules {
-                if let Some(result) = rule.consume(input) {
-                    let (token, remaining) = result?;
-                    if let Some(token) = token {
+                let matched_size = match rule.matches(&state) {
+                    None => continue,
+                    Some(size) => size,
+                };
+
+                if let Ok(result) = rule.consume(&state, matched_size) {
+                    if let Some(token) = result {
                         tokens.push(token);
                     }
-                    input = remaining;
                     was_consumed = true;
+                    state.advance(matched_size);
                     break;
                 }
             }
             if !was_consumed {
-                return Err(LexError::UnknownPattern(input));
+                return Err(LexError::unknown(input));
             }
         }
         Ok(tokens)
@@ -140,7 +174,7 @@ pub enum DefaultTokenTier {
 
 pub struct LexerBuilder<Token, Tier = DefaultTokenTier>
 where
-    Token: std::fmt::Debug + Clone,
+    Token: std::fmt::Debug,
     Tier: std::hash::Hash + Ord + Default,
 {
     rules: HashMap<Tier, Vec<LexRule<Token>>>,
@@ -148,11 +182,11 @@ where
 
 impl<Token, Tier> LexerBuilder<Token, Tier>
 where
-    Token: std::fmt::Debug + Clone,
+    Token: std::fmt::Debug,
     Tier: std::hash::Hash + Ord + Default,
 {
     pub fn new() -> Self {
-        LexerBuilder {
+        Self {
             rules: HashMap::new(),
         }
     }
@@ -178,7 +212,7 @@ where
 
 impl<Token, Tier> Default for LexerBuilder<Token, Tier>
 where
-    Token: std::fmt::Debug + Clone,
+    Token: std::fmt::Debug,
     Tier: std::hash::Hash + Ord + Default,
 {
     fn default() -> Self {

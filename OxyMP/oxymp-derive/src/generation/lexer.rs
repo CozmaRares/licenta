@@ -54,7 +54,6 @@ fn generate_rule(
     tok: &TokenInfo,
     simple: bool,
 ) -> (&Option<proc_macro2::TokenStream>, proc_macro2::TokenStream) {
-    let _Rc = get_def(Symbol::Rc, simple);
     let _Box = get_def(Symbol::Box, simple);
     let _LexRule = get_def(Symbol::UtilLexRule, simple);
     let _TokenHandler = get_def(Symbol::UtilTokenHandler, simple);
@@ -72,10 +71,12 @@ fn generate_rule(
             (
                 tier,
                 quote! {
-                    #_LexRule {
-                        matcher: #_TokenMatcher::Exact(#pattern.to_string()),
-                        handler: #_TokenHandler::Pattern(Token::#enum_ident(#struct_ident))
-                    }
+                    #_LexRule::new(
+                        #_TokenMatcher::Exact(#pattern.to_string()),
+                        #_TokenHandler::Pattern(
+                            #_Box::new(|_, _| Token::#enum_ident(#struct_ident))
+                        ),
+                    )
                 },
             )
         }
@@ -92,24 +93,26 @@ fn generate_rule(
             (
                 tier,
                 quote! {
-                    #_LexRule {
-                        matcher: #_TokenMatcher::regex(#regex),
-                        handler: #_TokenHandler::Regex(
+                    #_LexRule::new(
+                        #_TokenMatcher::regex(#regex),
+                        #_TokenHandler::Regex(
                             #_Box::new(
-                                |matched| #transformer_fn(matched).map(|t| Token::#enum_ident(#struct_ident(#_Rc::new(t))))
+                                |state, matched_size|
+                                    #transformer_fn(state.current_n(matched_size))
+                                        .map(|t| Token::#enum_ident(#struct_ident(t)))
                             )
-                        )
-                    }
+                        ),
+                    )
                 },
             )
         }
         TokenInfo::Ignore(IgnorePattern { regex, tier }) => (
             tier,
             quote! {
-                #_LexRule {
-                    matcher: #_TokenMatcher::regex(#regex),
-                    handler: #_TokenHandler::Ignore
-                }
+                #_LexRule::new(
+                    #_TokenMatcher::regex(#regex),
+                    #_TokenHandler::Ignore,
+                )
             },
         ),
     }
